@@ -625,7 +625,9 @@ class MemoryEntry(OwnedRecord):
             raise ValidationError({"due_at": "A follow-up needs a due date."})
         if self.kind == "correction" and not self.corrects_id:
             raise ValidationError({"kind": "A correction must correct an existing entry."})
-        if self.corrects_id:
+        # These checks describe creating a correction; after it supersedes the old claim,
+        # the predecessor's status is legitimately no longer active.
+        if self.corrects_id and self._state.adding:
             if self.corrects.user_id != self.user_id:
                 raise ValidationError("Unknown entry.")
             if self.corrects.status != "active":

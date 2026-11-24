@@ -1,7 +1,7 @@
 """The API contract: envelope, auth, paging, write rules and the errors that must not leak."""
 
 import json
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -514,3 +514,122 @@ def test_each_write_route_round_trips(collection, api, user):
     assert api.get(f"{collection}/{pk}").status_code == 200
     assert patch(api, f"{collection}/{pk}", {}).status_code == 200
     assert api.delete(f"{collection}/{pk}").status_code == 204
+
+
+def test_valid_decimals_survive_input(api, course):
+    goal = post(
+        api, "/api/v1/goals", {"metric": "body_weight", "direction": "decrease", "target": 88.1}
+    )
+    assert goal.status_code == 201, goal.content
+    assert goal.json()["target"] == 88.1
+    medication = course()
+    medication.save()
+    dose = post(
+        api,
+        "/api/v1/dose-events",
+        {"medication_id": medication.pk, "at": "2026-11-24T08:00:00Z", "dose": 0.1},
+    )
+    assert dose.status_code == 201, dose.content
+    assert dose.json()["dose"] == 0.1
+    measurement = post(api, "/api/v1/measurements", {"metric": "body_weight", "value": 88.1})
+    assert measurement.status_code == 201, measurement.content
+    patched = patch(api, f"/api/v1/goals/{goal.json()['id']}", {"target": 88.2})
+    assert patched.status_code == 200, patched.content
+    assert patched.json()["target"] == 88.2
+
+
+def test_a_disabled_account_loses_api_access(api, user):
+    user.is_active = False
+    user.save(update_fields=["is_active"])
+    response = api.get("/api/v1/notes")
+    assert response.status_code == 401
+    assert body(response)["error"]["code"] == "unauthorized"
+
+
+def test_a_choice_error_never_echoes_the_value(api):
+    sentinel = "sentinel-choice-value"
+    response = post(api, "/api/v1/conditions", {"name": "x", "status": sentinel})
+    assert response.status_code == 422
+    assert sentinel not in response.content.decode()
+    detail = body(response)["error"]["details"][0]
+    assert detail["path"] == "status"
+    assert detail["message"] == "Unknown value."
+
+
+def test_item_reads_and_writes_carry_the_envelope(api):
+    created = post(api, "/api/v1/notes", {"body": "enveloped"})
+    for payload in (created.json(),):
+        assert payload["contract_version"] == A.CONTRACT_VERSION
+        assert payload["registry_version"] == R.REGISTRY_VERSION
+        assert payload["generated_at"]
+    note_id = created.json()["id"]
+    _, fetched = get(api, f"/api/v1/notes/{note_id}")
+    assert (fetched["contract_version"], fetched["registry_version"]) == (A.CONTRACT_VERSION, 1)
+    patched = patch(api, f"/api/v1/notes/{note_id}", {"body": "still enveloped"}).json()
+    assert patched["contract_version"] == A.CONTRACT_VERSION
+    _, health = get(api, "/api/v1/health")
+    assert health["generated_at"]
+    _, listed = get(api, "/api/v1/notes")
+    assert "contract_version" not in listed["items"][0]
+
+
+def test_a_blood_pressure_panel_can_be_annotated(api):
+    panel = post(
+        api,
+        "/api/v1/measurements",
+        {
+            "metric": "blood_pressure",
+            "at": "2026-11-24T08:00:00+01:00",
+            "components": {"systolic": 120, "diastolic": 80},
+            "context": {"posture": "sitting", "side": "left"},
+        },
+    ).json()
+    assert panel["posture"] == "sitting"
+    assert panel["components"][0]["posture"] == "sitting"
+    assert panel["components"][0]["side"] == "left"
+    updated = patch(api, f"/api/v1/measurements/{panel['id']}", {"note": "retaken"})
+    assert updated.status_code == 200, updated.content
+    assert updated.json()["note"] == "retaken"
+    assert patch(api, f"/api/v1/measurements/{panel['id']}", {"value": 120}).status_code == 422
+
+
+def test_a_correction_can_be_pinned(api):
+    old = post(
+        api,
+        "/api/v1/memory",
+        {"kind": "fact", "subject": "a", "statement": "one", "observed_at": "2026-11-01T08:00:00Z"},
+    ).json()
+    correction = post(
+        api,
+        "/api/v1/memory",
+        {
+            "kind": "correction",
+            "subject": "a",
+            "statement": "two",
+            "observed_at": "2026-11-02T08:00:00Z",
+            "corrects_id": old["id"],
+        },
+    ).json()
+    response = patch(api, f"/api/v1/memory/{correction['id']}", {"pinned": True})
+    assert response.status_code == 200, response.content
+    assert response.json()["pinned"] is True
+
+
+def test_dates_follow_the_account_timezone(api, user, monkeypatch):
+    M.Person._default_manager.update_or_create(
+        user=user, defaults={"timezone": "Pacific/Kiritimati"}
+    )
+    instant = datetime(2026, 11, 24, 12, 30, tzinfo=UTC)
+    monkeypatch.setattr(timezone, "now", lambda: instant)
+    _, payload = get(api, "/api/v1/health")
+    # 12:30 UTC is already the next day in UTC+14 and still the same day in Stockholm.
+    assert payload["today"] == "2026-11-25"
+
+
+def test_an_explicit_null_for_a_non_nullable_field_is_422(api):
+    note = post(api, "/api/v1/notes", {"body": "x", "tags": ["a"]}).json()
+    response = patch(api, f"/api/v1/notes/{note['id']}", {"tags": None})
+    assert response.status_code == 422
+    assert body(response)["error"]["details"][0]["path"] == "tags"
+    response = patch(api, f"/api/v1/notes/{note['id']}", {"at": None})
+    assert response.status_code == 422

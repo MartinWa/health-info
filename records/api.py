@@ -22,7 +22,7 @@ from ninja import NinjaAPI, Schema
 from ninja.errors import AuthenticationError, HttpError
 from ninja.errors import ValidationError as NinjaValidationError
 from ninja.security import HttpBearer
-from pydantic import ConfigDict, Field, PlainSerializer
+from pydantic import ConfigDict, Field, PlainSerializer, create_model
 
 from records import models as M
 from records import registries as R
@@ -35,7 +35,9 @@ CONTRACT_VERSION = "1.0"
 MAX_RANGE_DAYS = 1830
 DEFAULT_RANGE_DAYS = 30
 
-# Pydantic v2 writes a Decimal as a JSON string; the contract says numbers.
+# Pydantic v2 writes a Decimal as a JSON string; the contract says numbers, so responses
+# use `Number`. Input schemas use plain `Decimal`: dumping a request through the float
+# serialiser corrupts values like 88.1 before Django checks the scale.
 Number = Annotated[Decimal, PlainSerializer(lambda value: float(value), return_type=float)]
 
 
@@ -54,16 +56,26 @@ def invalid_field(path: str, message: str, code: str = "invalid") -> Problem:
     return Problem(422, code, message, [{"path": path, "message": message}])
 
 
+# Codes whose Django message interpolates the submitted value.
+SAFE_MESSAGES = {"invalid_choice": "Unknown value.", "invalid": "Invalid value."}
+
+
+def _safe_error(error) -> str:
+    if error.code in SAFE_MESSAGES:
+        return SAFE_MESSAGES[error.code]
+    return "; ".join(str(message) for message in error.messages)
+
+
 def invalid(exc: DjangoValidationError) -> Problem:
     """Django's field errors become 422 details; the messages never carry a value."""
     if hasattr(exc, "error_dict"):
         details = [
-            {"path": "" if field == "__all__" else field, "message": str(message)}
-            for field, messages in exc.error_dict.items()
-            for message in messages
+            {"path": "" if field == "__all__" else field, "message": _safe_error(error)}
+            for field, errors in exc.error_dict.items()
+            for error in errors
         ]
     else:
-        details = [{"path": "", "message": str(message)} for message in exc.messages]
+        details = [{"path": "", "message": _safe_error(error)} for error in exc.error_list]
     return Problem(422, "invalid", "Some fields are invalid.", details)
 
 
@@ -79,9 +91,12 @@ class Bearer(HttpBearer):
             or not hmac.compare_digest(row.key_hash, digest)
             or row.revoked_at is not None
             or (row.expires_at is not None and row.expires_at <= now)
+            or not row.user.is_active
         ):
-            # Bad, expired and revoked are indistinguishable to the caller.
+            # Bad, expired, revoked and disabled are indistinguishable to the caller.
             raise AuthenticationError(message="Unauthorized.")
+        # A bearer request has no session, so the timezone middleware never activated.
+        timezone.activate(S.account_timezone(row.user))
         M.ApiToken._default_manager.filter(pk=row.pk).update(last_used_at=now)
         return row
 
@@ -318,6 +333,9 @@ class ComponentOut(Schema):
     metric: str
     value: Number | None = None
     unit: str
+    posture: str
+    side: str
+    fasted: bool | None = None
 
 
 class MeasurementOut(RecordOut):
@@ -579,9 +597,35 @@ class HealthOut(Schema):
     status: str
     version: str
     contract_version: str
+    generated_at: datetime
     registry_version: int
     today: date
     counts: dict[str, int]
+
+
+class Envelope(Schema):
+    contract_version: str
+    generated_at: datetime
+    registry_version: int
+
+
+def enveloped(schema):
+    """An item or write response: the resource fields plus the envelope keys."""
+    return create_model(f"{schema.__name__}Item", __base__=(schema, Envelope))
+
+
+GoalItem = enveloped(GoalOut)
+ProgramItem = enveloped(ProgramOut)
+PeriodItem = enveloped(PeriodOut)
+ConditionItem = enveloped(ConditionOut)
+InjuryItem = enveloped(InjuryOut)
+DoseEventItem = enveloped(DoseEventOut)
+MeasurementItem = enveloped(MeasurementOut)
+SymptomItem = enveloped(SymptomOut)
+CheckinItem = enveloped(CheckinOut)
+NoteItem = enveloped(NoteOut)
+AppointmentItem = enveloped(AppointmentOut)
+MemoryItem = enveloped(MemoryOut)
 
 
 # --- Input schemas: unknown fields are rejected, so `422` names the field ---------------
@@ -594,13 +638,13 @@ class Strict(Schema):
 class GoalIn(Strict):
     metric: str
     direction: str
-    target: Number
-    target_high: Number | None = None
+    target: Decimal
+    target_high: Decimal | None = None
     by: date | None = None
     review_at: date | None = None
     priority: int = 1
     status: str = "active"
-    baseline_value: Number | None = None
+    baseline_value: Decimal | None = None
     baseline_on: date | None = None
     note: str = ""
 
@@ -608,13 +652,13 @@ class GoalIn(Strict):
 class GoalPatch(Strict):
     metric: str | None = None
     direction: str | None = None
-    target: Number | None = None
-    target_high: Number | None = None
+    target: Decimal | None = None
+    target_high: Decimal | None = None
     by: date | None = None
     review_at: date | None = None
     priority: int | None = None
     status: str | None = None
-    baseline_value: Number | None = None
+    baseline_value: Decimal | None = None
     baseline_on: date | None = None
     note: str | None = None
 
@@ -706,14 +750,14 @@ class DoseEventIn(Strict):
     status: str = "taken"
     at: datetime
     scheduled_for: datetime | None = None
-    dose: Number | None = None
+    dose: Decimal | None = None
     reason: str = ""
 
 
 class DoseEventPatch(Strict):
     status: str | None = None
     at: datetime | None = None
-    dose: Number | None = None
+    dose: Decimal | None = None
     reason: str | None = None
 
 
@@ -730,7 +774,7 @@ class ComponentsIn(Strict):
 
 class MeasurementIn(Strict):
     metric: str
-    value: Number | None = None
+    value: Decimal | None = None
     unit: str | None = None
     at: datetime | None = None
     context: ContextIn = Field(default_factory=ContextIn)
@@ -741,7 +785,7 @@ class MeasurementIn(Strict):
 
 
 class MeasurementPatch(Strict):
-    value: Number | None = None
+    value: Decimal | None = None
     at: datetime | None = None
     posture: str | None = None
     side: str | None = None
@@ -885,6 +929,11 @@ def fetch(model, request, pk, *, queryset=None, path="id"):
 
 
 def commit(obj):
+    for field in obj._meta.concrete_fields:
+        if field.null or field.primary_key or not field.editable:
+            continue
+        if getattr(obj, field.attname) is None:
+            raise invalid_field(field.name, "This field cannot be null.")
     try:
         obj.full_clean()
         obj.save()
@@ -905,9 +954,11 @@ def created(request, payload):
     return response
 
 
-def render(schema, obj, warnings=()):
+def render(schema, obj, warnings=(), with_envelope=True):
     data = schema.model_validate(obj).model_dump()
     data["warnings"] = list(warnings)
+    if with_envelope:
+        data.update(envelope())
     return data
 
 
@@ -916,7 +967,7 @@ def page(request, queryset, schema, limit, offset, renderer=None):
     offset = max(0, offset)
     total = queryset.count()
     rows = list(queryset[offset : offset + limit])
-    renderer = renderer or (lambda row: render(schema, row))
+    renderer = renderer or (lambda row: render(schema, row, with_envelope=False))
     return {
         **envelope(),
         "items": [renderer(row) for row in rows],
@@ -1074,7 +1125,7 @@ def list_goals(request, limit: int = 50, offset: int = 0):
     return handle_list(request, M.Goal, GoalOut, limit, offset)
 
 
-@api.post("/goals", response={201: GoalOut}, tags=["goals"])
+@api.post("/goals", response={201: GoalItem}, tags=["goals"])
 def create_goal(request, payload: GoalIn):
     data = payload.model_dump()
     metric = resolve_metric_or_422(data.pop("metric"))
@@ -1091,12 +1142,12 @@ def create_goal(request, payload: GoalIn):
     )
 
 
-@api.get("/goals/{id}", response=GoalOut, tags=["goals"])
+@api.get("/goals/{id}", response=GoalItem, tags=["goals"])
 def get_goal(request, id: int):
     return render(GoalOut, fetch(M.Goal, request, id))
 
 
-@api.patch("/goals/{id}", response=GoalOut, tags=["goals"])
+@api.patch("/goals/{id}", response=GoalItem, tags=["goals"])
 def update_goal(request, id: int, payload: GoalPatch):
     obj = fetch(M.Goal, request, id)
     data = payload.model_dump(exclude_unset=True)
@@ -1123,7 +1174,7 @@ def list_programs(request, limit: int = 50, offset: int = 0):
     return handle_list(request, M.Program, ProgramOut, limit, offset)
 
 
-@api.post("/programs", response={201: ProgramOut}, tags=["program"])
+@api.post("/programs", response={201: ProgramItem}, tags=["program"])
 def create_program(request, payload: ProgramIn):
     data = payload.model_dump()
     data["workout_types"] = [
@@ -1134,12 +1185,12 @@ def create_program(request, payload: ProgramIn):
     return created(request, render(ProgramOut, obj))
 
 
-@api.get("/programs/{id}", response=ProgramOut, tags=["program"])
+@api.get("/programs/{id}", response=ProgramItem, tags=["program"])
 def get_program(request, id: int):
     return render(ProgramOut, fetch(M.Program, request, id))
 
 
-@api.patch("/programs/{id}", response=ProgramOut, tags=["program"])
+@api.patch("/programs/{id}", response=ProgramItem, tags=["program"])
 def update_program(request, id: int, payload: ProgramPatch):
     obj = fetch(M.Program, request, id)
     data = payload.model_dump(exclude_unset=True)
@@ -1166,19 +1217,19 @@ def list_periods(request, limit: int = 50, offset: int = 0):
     return handle_list(request, M.Period, PeriodOut, limit, offset, "start", "date")
 
 
-@api.post("/periods", response={201: PeriodOut}, tags=["periods"])
+@api.post("/periods", response={201: PeriodItem}, tags=["periods"])
 def create_period(request, payload: PeriodIn):
     obj = new_record(M.Period, request, payload.model_dump())
     audit(request, "create", "records.Period", obj.pk)
     return created(request, render(PeriodOut, obj))
 
 
-@api.get("/periods/{id}", response=PeriodOut, tags=["periods"])
+@api.get("/periods/{id}", response=PeriodItem, tags=["periods"])
 def get_period(request, id: int):
     return render(PeriodOut, fetch(M.Period, request, id))
 
 
-@api.patch("/periods/{id}", response=PeriodOut, tags=["periods"])
+@api.patch("/periods/{id}", response=PeriodItem, tags=["periods"])
 def update_period(request, id: int, payload: PeriodPatch):
     obj = fetch(M.Period, request, id)
     for field, value in payload.model_dump(exclude_unset=True).items():
@@ -1200,7 +1251,7 @@ def list_conditions(request, limit: int = 50, offset: int = 0):
     return handle_list(request, M.Condition, ConditionOut, limit, offset)
 
 
-@api.post("/conditions", response={201: ConditionOut}, tags=["conditions"])
+@api.post("/conditions", response={201: ConditionItem}, tags=["conditions"])
 def create_condition(request, payload: ConditionIn):
     data = payload.model_dump()
     practitioner = practitioner_for(request, data.pop("practitioner_id"))
@@ -1211,12 +1262,12 @@ def create_condition(request, payload: ConditionIn):
     return created(request, render(ConditionOut, obj))
 
 
-@api.get("/conditions/{id}", response=ConditionOut, tags=["conditions"])
+@api.get("/conditions/{id}", response=ConditionItem, tags=["conditions"])
 def get_condition(request, id: int):
     return render(ConditionOut, fetch(M.Condition, request, id))
 
 
-@api.patch("/conditions/{id}", response=ConditionOut, tags=["conditions"])
+@api.patch("/conditions/{id}", response=ConditionItem, tags=["conditions"])
 def update_condition(request, id: int, payload: ConditionPatch):
     obj = fetch(M.Condition, request, id)
     data = payload.model_dump(exclude_unset=True)
@@ -1240,7 +1291,7 @@ def list_injuries(request, limit: int = 50, offset: int = 0):
     return handle_list(request, M.Injury, InjuryOut, limit, offset)
 
 
-@api.post("/injuries", response={201: InjuryOut}, tags=["injuries"])
+@api.post("/injuries", response={201: InjuryItem}, tags=["injuries"])
 def create_injury(request, payload: InjuryIn):
     data = payload.model_dump()
     data["limits"] = _limits(payload.limits)
@@ -1251,12 +1302,12 @@ def create_injury(request, payload: InjuryIn):
     return created(request, render(InjuryOut, obj))
 
 
-@api.get("/injuries/{id}", response=InjuryOut, tags=["injuries"])
+@api.get("/injuries/{id}", response=InjuryItem, tags=["injuries"])
 def get_injury(request, id: int):
     return render(InjuryOut, fetch(M.Injury, request, id))
 
 
-@api.patch("/injuries/{id}", response=InjuryOut, tags=["injuries"])
+@api.patch("/injuries/{id}", response=InjuryItem, tags=["injuries"])
 def update_injury(request, id: int, payload: InjuryPatch):
     obj = fetch(M.Injury, request, id)
     data = payload.model_dump(exclude_unset=True)
@@ -1294,7 +1345,7 @@ def list_dose_events(request, limit: int = 50, offset: int = 0):
     return handle_list(request, M.DoseEvent, DoseEventOut, limit, offset, "at")
 
 
-@api.post("/dose-events", response={200: DoseEventOut, 201: DoseEventOut}, tags=["doses"])
+@api.post("/dose-events", response={200: DoseEventItem, 201: DoseEventItem}, tags=["doses"])
 def create_dose_event(request, payload: DoseEventIn):
     data = payload.model_dump()
     medication = fetch(M.Medication, request, data.pop("medication_id"), path="medication_id")
@@ -1311,12 +1362,12 @@ def create_dose_event(request, payload: DoseEventIn):
     return created(request, render(DoseEventOut, obj))
 
 
-@api.get("/dose-events/{id}", response=DoseEventOut, tags=["doses"])
+@api.get("/dose-events/{id}", response=DoseEventItem, tags=["doses"])
 def get_dose_event(request, id: int):
     return render(DoseEventOut, fetch(M.DoseEvent, request, id))
 
 
-@api.patch("/dose-events/{id}", response=DoseEventOut, tags=["doses"])
+@api.patch("/dose-events/{id}", response=DoseEventItem, tags=["doses"])
 def update_dose_event(request, id: int, payload: DoseEventPatch):
     obj = fetch(M.DoseEvent, request, id)
     for field, value in payload.model_dump(exclude_unset=True).items():
@@ -1347,7 +1398,7 @@ def list_measurements(request, limit: int = 50, offset: int = 0):
     return page(request, queryset, MeasurementOut, limit, offset)
 
 
-@api.post("/measurements", response={201: MeasurementOut}, tags=["measurements"])
+@api.post("/measurements", response={201: MeasurementItem}, tags=["measurements"])
 def create_measurement(request, payload: MeasurementIn):
     metric = resolve_metric_or_422(payload.metric)
     at = payload.at or timezone.now()
@@ -1428,6 +1479,8 @@ def _create_blood_pressure(request, payload: MeasurementIn, at):
         at=at,
         note=payload.note,
         device=payload.device,
+        posture=context.get("posture") or "",
+        side=context.get("side") or "",
     )
     for code, value in readings.items():
         metric = R.METRICS[code]
@@ -1457,7 +1510,7 @@ def _create_blood_pressure(request, payload: MeasurementIn, at):
     return created(request, render(MeasurementOut, panel, warnings))
 
 
-@api.get("/measurements/{id}", response=MeasurementOut, tags=["measurements"])
+@api.get("/measurements/{id}", response=MeasurementItem, tags=["measurements"])
 def get_measurement(request, id: int):
     obj = fetch(
         M.Measurement,
@@ -1468,7 +1521,7 @@ def get_measurement(request, id: int):
     return render(MeasurementOut, obj)
 
 
-@api.patch("/measurements/{id}", response=MeasurementOut, tags=["measurements"])
+@api.patch("/measurements/{id}", response=MeasurementItem, tags=["measurements"])
 def update_measurement(request, id: int, payload: MeasurementPatch):
     obj = fetch(
         M.Measurement,
@@ -1481,6 +1534,14 @@ def update_measurement(request, id: int, payload: MeasurementPatch):
         for field in data:
             if field not in ("at", "note"):
                 raise invalid_field(field, "A blood pressure panel carries only its components.")
+        for field, value in data.items():
+            setattr(obj, field, value)
+        with transaction.atomic():
+            obj.save()
+            if "at" in data:
+                obj.components.update(at=obj.at)
+        audit(request, "update", "records.Measurement", obj.pk)
+        return render(MeasurementOut, obj)
     warnings = ()
     if data.get("value") is not None:
         warnings = warnings_for(R.resolve_metric(obj.metric), data["value"], "value")
@@ -1508,7 +1569,7 @@ def list_symptoms(request, limit: int = 50, offset: int = 0):
     return handle_list(request, M.Symptom, SymptomOut, limit, offset, "onset_at")
 
 
-@api.post("/symptoms", response={201: SymptomOut}, tags=["symptoms"])
+@api.post("/symptoms", response={201: SymptomItem}, tags=["symptoms"])
 def create_symptom(request, payload: SymptomIn):
     data = payload.model_dump()
     data["onset_at"] = data["onset_at"] or timezone.now()
@@ -1517,12 +1578,12 @@ def create_symptom(request, payload: SymptomIn):
     return created(request, render(SymptomOut, obj))
 
 
-@api.get("/symptoms/{id}", response=SymptomOut, tags=["symptoms"])
+@api.get("/symptoms/{id}", response=SymptomItem, tags=["symptoms"])
 def get_symptom(request, id: int):
     return render(SymptomOut, fetch(M.Symptom, request, id))
 
 
-@api.patch("/symptoms/{id}", response=SymptomOut, tags=["symptoms"])
+@api.patch("/symptoms/{id}", response=SymptomItem, tags=["symptoms"])
 def update_symptom(request, id: int, payload: SymptomPatch):
     obj = fetch(M.Symptom, request, id)
     for field, value in payload.model_dump(exclude_unset=True).items():
@@ -1544,7 +1605,7 @@ def list_checkins(request, limit: int = 50, offset: int = 0):
     return handle_list(request, M.Checkin, CheckinOut, limit, offset, "at")
 
 
-@api.post("/checkins", response={201: CheckinOut}, tags=["checkins"])
+@api.post("/checkins", response={201: CheckinItem}, tags=["checkins"])
 def create_checkin(request, payload: CheckinIn):
     data = payload.model_dump()
     data["at"] = data["at"] or timezone.now()
@@ -1553,12 +1614,12 @@ def create_checkin(request, payload: CheckinIn):
     return created(request, render(CheckinOut, obj))
 
 
-@api.get("/checkins/{id}", response=CheckinOut, tags=["checkins"])
+@api.get("/checkins/{id}", response=CheckinItem, tags=["checkins"])
 def get_checkin(request, id: int):
     return render(CheckinOut, fetch(M.Checkin, request, id))
 
 
-@api.patch("/checkins/{id}", response=CheckinOut, tags=["checkins"])
+@api.patch("/checkins/{id}", response=CheckinItem, tags=["checkins"])
 def update_checkin(request, id: int, payload: CheckinPatch):
     obj = fetch(M.Checkin, request, id)
     for field, value in payload.model_dump(exclude_unset=True).items():
@@ -1580,7 +1641,7 @@ def list_notes(request, limit: int = 50, offset: int = 0):
     return handle_list(request, M.Note, NoteOut, limit, offset, "at")
 
 
-@api.post("/notes", response={201: NoteOut}, tags=["notes"])
+@api.post("/notes", response={201: NoteItem}, tags=["notes"])
 def create_note(request, payload: NoteIn):
     data = payload.model_dump()
     data["at"] = data["at"] or timezone.now()
@@ -1589,12 +1650,12 @@ def create_note(request, payload: NoteIn):
     return created(request, render(NoteOut, obj))
 
 
-@api.get("/notes/{id}", response=NoteOut, tags=["notes"])
+@api.get("/notes/{id}", response=NoteItem, tags=["notes"])
 def get_note(request, id: int):
     return render(NoteOut, fetch(M.Note, request, id))
 
 
-@api.patch("/notes/{id}", response=NoteOut, tags=["notes"])
+@api.patch("/notes/{id}", response=NoteItem, tags=["notes"])
 def update_note(request, id: int, payload: NotePatch):
     obj = fetch(M.Note, request, id)
     for field, value in payload.model_dump(exclude_unset=True).items():
@@ -1616,7 +1677,7 @@ def list_appointments(request, limit: int = 50, offset: int = 0):
     return handle_list(request, M.Appointment, AppointmentOut, limit, offset, "at")
 
 
-@api.post("/appointments", response={201: AppointmentOut}, tags=["appointments"])
+@api.post("/appointments", response={201: AppointmentItem}, tags=["appointments"])
 def create_appointment(request, payload: AppointmentIn):
     data = payload.model_dump()
     practitioner = practitioner_for(request, data.pop("practitioner_id"))
@@ -1627,12 +1688,12 @@ def create_appointment(request, payload: AppointmentIn):
     return created(request, render(AppointmentOut, obj))
 
 
-@api.get("/appointments/{id}", response=AppointmentOut, tags=["appointments"])
+@api.get("/appointments/{id}", response=AppointmentItem, tags=["appointments"])
 def get_appointment(request, id: int):
     return render(AppointmentOut, fetch(M.Appointment, request, id))
 
 
-@api.patch("/appointments/{id}", response=AppointmentOut, tags=["appointments"])
+@api.patch("/appointments/{id}", response=AppointmentItem, tags=["appointments"])
 def update_appointment(request, id: int, payload: AppointmentPatch):
     obj = fetch(M.Appointment, request, id)
     data = payload.model_dump(exclude_unset=True)
@@ -1656,7 +1717,7 @@ def list_memory(request, limit: int = 50, offset: int = 0):
     return handle_list(request, M.MemoryEntry, MemoryOut, limit, offset, "observed_at")
 
 
-@api.post("/memory", response={201: MemoryOut}, tags=["memory"])
+@api.post("/memory", response={201: MemoryItem}, tags=["memory"])
 def create_memory(request, payload: MemoryIn):
     data = payload.model_dump()
     corrects_id = data.pop("corrects_id")
@@ -1692,12 +1753,12 @@ def create_memory(request, payload: MemoryIn):
     return created(request, render(MemoryOut, obj))
 
 
-@api.get("/memory/{id}", response=MemoryOut, tags=["memory"])
+@api.get("/memory/{id}", response=MemoryItem, tags=["memory"])
 def get_memory(request, id: int):
     return render(MemoryOut, fetch(M.MemoryEntry, request, id))
 
 
-@api.patch("/memory/{id}", response=MemoryOut, tags=["memory"])
+@api.patch("/memory/{id}", response=MemoryItem, tags=["memory"])
 def update_memory(request, id: int, payload: MemoryPatch):
     obj = fetch(M.MemoryEntry, request, id)
     if obj.locked:
@@ -1886,10 +1947,9 @@ def health(request):
     }
     counts["dose_events"] = M.DoseEvent._default_manager.filter(user=user).count()
     return {
+        **envelope(),
         "status": "ok",
         "version": settings.APP_VERSION,
-        "contract_version": CONTRACT_VERSION,
-        "registry_version": R.REGISTRY_VERSION,
         "today": timezone.localdate(),
         "counts": counts,
     }

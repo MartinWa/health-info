@@ -289,6 +289,111 @@
         "title": "AppointmentOut",
         "type": "object"
       },
+      "AppointmentOutItem": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "outcome_note": {
+            "title": "Outcome Note",
+            "type": "string"
+          },
+          "place": {
+            "title": "Place",
+            "type": "string"
+          },
+          "practitioner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Practitioner Id"
+          },
+          "practitioner_name": {
+            "title": "Practitioner Name",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "specialty": {
+            "title": "Specialty",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_version",
+          "generated_at",
+          "registry_version",
+          "id",
+          "source",
+          "reported_by",
+          "created_at",
+          "updated_at",
+          "at",
+          "practitioner_name",
+          "specialty",
+          "place",
+          "reason",
+          "status",
+          "outcome_note"
+        ],
+        "title": "AppointmentOutItem",
+        "type": "object"
+      },
       "AppointmentPatch": {
         "additionalProperties": false,
         "properties": {
@@ -629,6 +734,141 @@
         "title": "CheckinOut",
         "type": "object"
       },
+      "CheckinOutItem": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "energy": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "hunger": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hunger"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "mood": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mood"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "sleep_quality": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleep Quality"
+          },
+          "soreness": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soreness"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "stress": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stress"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_version",
+          "generated_at",
+          "registry_version",
+          "id",
+          "source",
+          "reported_by",
+          "created_at",
+          "updated_at",
+          "at",
+          "note"
+        ],
+        "title": "CheckinOutItem",
+        "type": "object"
+      },
       "CheckinPatch": {
         "additionalProperties": false,
         "properties": {
@@ -727,12 +967,31 @@
       },
       "ComponentOut": {
         "properties": {
+          "fasted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fasted"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
           },
           "metric": {
             "title": "Metric",
+            "type": "string"
+          },
+          "posture": {
+            "title": "Posture",
+            "type": "string"
+          },
+          "side": {
+            "title": "Side",
             "type": "string"
           },
           "unit": {
@@ -754,7 +1013,9 @@
         "required": [
           "id",
           "metric",
-          "unit"
+          "unit",
+          "posture",
+          "side"
         ],
         "title": "ComponentOut",
         "type": "object"
@@ -969,6 +1230,127 @@
           "note"
         ],
         "title": "ConditionOut",
+        "type": "object"
+      },
+      "ConditionOutItem": {
+        "properties": {
+          "abatement": {
+            "title": "Abatement",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "practitioner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Practitioner Id"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "since_precision": {
+            "title": "Since Precision",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "verification_status": {
+            "title": "Verification Status",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_version",
+          "generated_at",
+          "registry_version",
+          "id",
+          "source",
+          "reported_by",
+          "created_at",
+          "updated_at",
+          "name",
+          "code",
+          "since_precision",
+          "status",
+          "verification_status",
+          "severity",
+          "abatement",
+          "note"
+        ],
+        "title": "ConditionOutItem",
         "type": "object"
       },
       "ConditionPatch": {
@@ -1278,6 +1660,108 @@
           "reason"
         ],
         "title": "DoseEventOut",
+        "type": "object"
+      },
+      "DoseEventOutItem": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "dose": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dose"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "medication_id": {
+            "title": "Medication Id",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "scheduled_for": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scheduled For"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_version",
+          "generated_at",
+          "registry_version",
+          "id",
+          "source",
+          "reported_by",
+          "created_at",
+          "updated_at",
+          "medication_id",
+          "status",
+          "at",
+          "reason"
+        ],
+        "title": "DoseEventOutItem",
         "type": "object"
       },
       "DoseEventPatch": {
@@ -1905,6 +2389,152 @@
         "title": "GoalOut",
         "type": "object"
       },
+      "GoalOutItem": {
+        "properties": {
+          "baseline_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline On"
+          },
+          "baseline_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Value"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "direction": {
+            "title": "Direction",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "priority": {
+            "title": "Priority",
+            "type": "integer"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "review_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review At"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "number"
+          },
+          "target_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target High"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_version",
+          "generated_at",
+          "registry_version",
+          "id",
+          "source",
+          "reported_by",
+          "created_at",
+          "updated_at",
+          "metric",
+          "direction",
+          "target",
+          "priority",
+          "status",
+          "note"
+        ],
+        "title": "GoalOutItem",
+        "type": "object"
+      },
       "GoalPatch": {
         "additionalProperties": false,
         "properties": {
@@ -2058,6 +2688,11 @@
             "title": "Counts",
             "type": "object"
           },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
           "registry_version": {
             "title": "Registry Version",
             "type": "integer"
@@ -2080,6 +2715,7 @@
           "status",
           "version",
           "contract_version",
+          "generated_at",
           "registry_version",
           "today",
           "counts"
@@ -2261,6 +2897,119 @@
           "limits"
         ],
         "title": "InjuryOut",
+        "type": "object"
+      },
+      "InjuryOutItem": {
+        "properties": {
+          "area": {
+            "title": "Area",
+            "type": "string"
+          },
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "limits": {
+            "items": {
+              "$ref": "#/components/schemas/LimitOut"
+            },
+            "title": "Limits",
+            "type": "array"
+          },
+          "mechanism": {
+            "title": "Mechanism",
+            "type": "string"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "rehab": {
+            "title": "Rehab",
+            "type": "string"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "side": {
+            "title": "Side",
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "since_precision": {
+            "title": "Since Precision",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "verification_status": {
+            "title": "Verification Status",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_version",
+          "generated_at",
+          "registry_version",
+          "id",
+          "source",
+          "reported_by",
+          "created_at",
+          "updated_at",
+          "area",
+          "side",
+          "since_precision",
+          "status",
+          "verification_status",
+          "mechanism",
+          "rehab",
+          "limits"
+        ],
+        "title": "InjuryOutItem",
         "type": "object"
       },
       "InjuryPatch": {
@@ -2721,6 +3470,129 @@
         "title": "MeasurementOut",
         "type": "object"
       },
+      "MeasurementOutItem": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/ComponentOut"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "device": {
+            "title": "Device",
+            "type": "string"
+          },
+          "fasted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fasted"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "posture": {
+            "title": "Posture",
+            "type": "string"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "side": {
+            "title": "Side",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_version",
+          "generated_at",
+          "registry_version",
+          "id",
+          "source",
+          "reported_by",
+          "created_at",
+          "updated_at",
+          "metric",
+          "unit",
+          "at",
+          "posture",
+          "side",
+          "device",
+          "note"
+        ],
+        "title": "MeasurementOutItem",
+        "type": "object"
+      },
       "MeasurementPatch": {
         "additionalProperties": false,
         "properties": {
@@ -3145,6 +4017,159 @@
         "title": "MemoryOut",
         "type": "object"
       },
+      "MemoryOutItem": {
+        "properties": {
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "corrects_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corrects Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "importance": {
+            "title": "Importance",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "locked": {
+            "title": "Locked",
+            "type": "boolean"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "pinned": {
+            "title": "Pinned",
+            "type": "boolean"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "source_ref": {
+            "title": "Source Ref",
+            "type": "string"
+          },
+          "statement": {
+            "title": "Statement",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "valid_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid Until"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_version",
+          "generated_at",
+          "registry_version",
+          "id",
+          "source",
+          "reported_by",
+          "created_at",
+          "updated_at",
+          "kind",
+          "subject",
+          "statement",
+          "observed_at",
+          "recorded_at",
+          "source_ref",
+          "importance",
+          "status",
+          "pinned",
+          "locked",
+          "tags"
+        ],
+        "title": "MemoryOutItem",
+        "type": "object"
+      },
       "MemoryPatch": {
         "additionalProperties": false,
         "properties": {
@@ -3303,6 +4328,83 @@
           "tags"
         ],
         "title": "NoteOut",
+        "type": "object"
+      },
+      "NoteOutItem": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_version",
+          "generated_at",
+          "registry_version",
+          "id",
+          "source",
+          "reported_by",
+          "created_at",
+          "updated_at",
+          "at",
+          "body",
+          "tags"
+        ],
+        "title": "NoteOutItem",
         "type": "object"
       },
       "NotePatch": {
@@ -4392,6 +5494,92 @@
         "title": "PeriodOut",
         "type": "object"
       },
+      "PeriodOutItem": {
+        "properties": {
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_version",
+          "generated_at",
+          "registry_version",
+          "id",
+          "source",
+          "reported_by",
+          "created_at",
+          "updated_at",
+          "kind",
+          "start",
+          "note"
+        ],
+        "title": "PeriodOutItem",
+        "type": "object"
+      },
       "PeriodPatch": {
         "additionalProperties": false,
         "properties": {
@@ -4798,6 +5986,133 @@
           "workout_types"
         ],
         "title": "ProgramOut",
+        "type": "object"
+      },
+      "ProgramOutItem": {
+        "properties": {
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deload_every_weeks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deload Every Weeks"
+          },
+          "ended": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "phase": {
+            "title": "Phase",
+            "type": "string"
+          },
+          "progression": {
+            "title": "Progression",
+            "type": "string"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "sessions_per_week": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessions Per Week"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "started": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "workout_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Workout Types",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_version",
+          "generated_at",
+          "registry_version",
+          "id",
+          "source",
+          "reported_by",
+          "created_at",
+          "updated_at",
+          "name",
+          "phase",
+          "progression",
+          "workout_types"
+        ],
+        "title": "ProgramOutItem",
         "type": "object"
       },
       "ProgramPatch": {
@@ -5429,6 +6744,123 @@
         "title": "SymptomOut",
         "type": "object"
       },
+      "SymptomOutItem": {
+        "properties": {
+          "body_area": {
+            "title": "Body Area",
+            "type": "string"
+          },
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "interference": {
+            "title": "Interference",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "onset_at": {
+            "format": "date-time",
+            "title": "Onset At",
+            "type": "string"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "severity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Severity"
+          },
+          "side": {
+            "title": "Side",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_version",
+          "generated_at",
+          "registry_version",
+          "id",
+          "source",
+          "reported_by",
+          "created_at",
+          "updated_at",
+          "name",
+          "interference",
+          "onset_at",
+          "body_area",
+          "side",
+          "trigger",
+          "note"
+        ],
+        "title": "SymptomOutItem",
+        "type": "object"
+      },
       "SymptomPatch": {
         "additionalProperties": false,
         "properties": {
@@ -5794,7 +7226,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AppointmentOut"
+                  "$ref": "#/components/schemas/AppointmentOutItem"
                 }
               }
             },
@@ -5859,7 +7291,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AppointmentOut"
+                  "$ref": "#/components/schemas/AppointmentOutItem"
                 }
               }
             },
@@ -5904,7 +7336,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AppointmentOut"
+                  "$ref": "#/components/schemas/AppointmentOutItem"
                 }
               }
             },
@@ -5987,7 +7419,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CheckinOut"
+                  "$ref": "#/components/schemas/CheckinOutItem"
                 }
               }
             },
@@ -6052,7 +7484,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CheckinOut"
+                  "$ref": "#/components/schemas/CheckinOutItem"
                 }
               }
             },
@@ -6097,7 +7529,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CheckinOut"
+                  "$ref": "#/components/schemas/CheckinOutItem"
                 }
               }
             },
@@ -6180,7 +7612,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConditionOut"
+                  "$ref": "#/components/schemas/ConditionOutItem"
                 }
               }
             },
@@ -6245,7 +7677,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConditionOut"
+                  "$ref": "#/components/schemas/ConditionOutItem"
                 }
               }
             },
@@ -6290,7 +7722,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConditionOut"
+                  "$ref": "#/components/schemas/ConditionOutItem"
                 }
               }
             },
@@ -6373,7 +7805,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoseEventOut"
+                  "$ref": "#/components/schemas/DoseEventOutItem"
                 }
               }
             },
@@ -6383,7 +7815,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoseEventOut"
+                  "$ref": "#/components/schemas/DoseEventOutItem"
                 }
               }
             },
@@ -6448,7 +7880,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoseEventOut"
+                  "$ref": "#/components/schemas/DoseEventOutItem"
                 }
               }
             },
@@ -6493,7 +7925,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoseEventOut"
+                  "$ref": "#/components/schemas/DoseEventOutItem"
                 }
               }
             },
@@ -6686,7 +8118,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GoalOut"
+                  "$ref": "#/components/schemas/GoalOutItem"
                 }
               }
             },
@@ -6751,7 +8183,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GoalOut"
+                  "$ref": "#/components/schemas/GoalOutItem"
                 }
               }
             },
@@ -6796,7 +8228,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GoalOut"
+                  "$ref": "#/components/schemas/GoalOutItem"
                 }
               }
             },
@@ -6906,7 +8338,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InjuryOut"
+                  "$ref": "#/components/schemas/InjuryOutItem"
                 }
               }
             },
@@ -6971,7 +8403,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InjuryOut"
+                  "$ref": "#/components/schemas/InjuryOutItem"
                 }
               }
             },
@@ -7016,7 +8448,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InjuryOut"
+                  "$ref": "#/components/schemas/InjuryOutItem"
                 }
               }
             },
@@ -7147,7 +8579,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MeasurementOut"
+                  "$ref": "#/components/schemas/MeasurementOutItem"
                 }
               }
             },
@@ -7212,7 +8644,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MeasurementOut"
+                  "$ref": "#/components/schemas/MeasurementOutItem"
                 }
               }
             },
@@ -7257,7 +8689,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MeasurementOut"
+                  "$ref": "#/components/schemas/MeasurementOutItem"
                 }
               }
             },
@@ -7388,7 +8820,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MemoryOut"
+                  "$ref": "#/components/schemas/MemoryOutItem"
                 }
               }
             },
@@ -7453,7 +8885,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MemoryOut"
+                  "$ref": "#/components/schemas/MemoryOutItem"
                 }
               }
             },
@@ -7498,7 +8930,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MemoryOut"
+                  "$ref": "#/components/schemas/MemoryOutItem"
                 }
               }
             },
@@ -7581,7 +9013,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NoteOut"
+                  "$ref": "#/components/schemas/NoteOutItem"
                 }
               }
             },
@@ -7646,7 +9078,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NoteOut"
+                  "$ref": "#/components/schemas/NoteOutItem"
                 }
               }
             },
@@ -7691,7 +9123,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NoteOut"
+                  "$ref": "#/components/schemas/NoteOutItem"
                 }
               }
             },
@@ -7774,7 +9206,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PeriodOut"
+                  "$ref": "#/components/schemas/PeriodOutItem"
                 }
               }
             },
@@ -7839,7 +9271,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PeriodOut"
+                  "$ref": "#/components/schemas/PeriodOutItem"
                 }
               }
             },
@@ -7884,7 +9316,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PeriodOut"
+                  "$ref": "#/components/schemas/PeriodOutItem"
                 }
               }
             },
@@ -8042,7 +9474,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProgramOut"
+                  "$ref": "#/components/schemas/ProgramOutItem"
                 }
               }
             },
@@ -8107,7 +9539,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProgramOut"
+                  "$ref": "#/components/schemas/ProgramOutItem"
                 }
               }
             },
@@ -8152,7 +9584,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProgramOut"
+                  "$ref": "#/components/schemas/ProgramOutItem"
                 }
               }
             },
@@ -8262,7 +9694,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SymptomOut"
+                  "$ref": "#/components/schemas/SymptomOutItem"
                 }
               }
             },
@@ -8327,7 +9759,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SymptomOut"
+                  "$ref": "#/components/schemas/SymptomOutItem"
                 }
               }
             },
@@ -8372,7 +9804,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SymptomOut"
+                  "$ref": "#/components/schemas/SymptomOutItem"
                 }
               }
             },
