@@ -214,6 +214,11 @@ p:last-child { margin-bottom: 0; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px 16px;
   padding: 16px;
+  /* A short window must still reach Sign out: the panel scrolls inside the viewport. */
+  max-height: calc(100vh - 88px);
+  max-height: calc(100dvh - 88px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
