@@ -6,7 +6,7 @@ description = "One household's health records: server-rendered UI and versioned 
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "Django==5.2.18",
-    "filelock==4.2.10",
+    "filelock==4.2.11",
     "tzdata==2026.6",
     "waitress==3.0.2",
     "whitenoise==6.12.0",
