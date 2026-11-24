@@ -21,11 +21,12 @@ Slices 1–5 of the plan's §10 build order:
   owner-scoped ids (`404`, never `403`), the write rules of §5, `/summary`,
   `/expected-doses`, `/adherence`, `/health`, and `/docs` plus `/openapi.json` (session or
   bearer). The contract is committed at `docs/api/openapi.json`; regenerate it with
-  `uv run python tools/dump_openapi.py`. The `Lab` model and `GET /labs` exist; no lab screen
-  is built yet.
+  `uv run python tools/dump_openapi.py`.
+- Labs: `/labs` lists panels, `/labs/new` adds one panel's analytes in a single form and
+  pre-fills analytes, units and reference bounds from the last panel with the same name.
+- Polish: `/export` (zip of the account's JSON), `/purge`, `/search` and `/llms.txt`.
 
-The labs UI (§6), backup/restore (§8) and export, purge, search and `/llms.txt` (§6 slice 6)
-are not built yet.
+Backup and restore (§8) are not built yet.
 
 ## Run it locally
 
@@ -65,6 +66,14 @@ pulling a published one.
 image target, needs no `.env`, serves on `127.0.0.1:8000` only, and keeps all state —
 database, virtualenv, caches — on named volumes while the working copy is bound into the
 container. Rebuild after a dependency change so the seeded virtualenv is refreshed.
+`HEALTH_INFO_DEV_PORT` moves the published host port, for a host that already uses 8000:
+
+```sh
+HEALTH_INFO_DEV_PORT=8020 docker compose -f compose.development.yaml up --build
+```
+
+The first account is `docker compose -f compose.development.yaml exec web python manage.py
+createsuperuser`.
 
 ```sh
 docker compose -f compose.development.yaml up --build

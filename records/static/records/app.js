@@ -1,6 +1,6 @@
 // Dirty-form guard: the only client state in this UI.
 document.addEventListener("DOMContentLoaded", () => {
-  const form = document.querySelector("form.record-form");
+  const form = document.querySelector('form.record-form[method="post"]');
   if (!form) return;
   const snapshot = () => new URLSearchParams(new FormData(form)).toString();
   const initial = snapshot();

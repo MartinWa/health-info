@@ -127,7 +127,7 @@ def domain_lines(user):
             "records:checkins_list",
             "View",
         ),
-        ("labs", "Not available yet", "records:dashboard", "—"),
+        ("labs", f"{_count(M.Lab, user)} results", "records:labs_list", "View"),
         (
             "vaccinations",
             f"{_count(M.Vaccination, user)} recorded",

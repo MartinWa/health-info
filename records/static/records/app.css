@@ -241,6 +241,9 @@ button.tap { min-width: 88px; }
 .button.quiet { background: var(--panel); color: var(--ink); border-color: var(--line); }
 .button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 
+.panel-row { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin: 0 0 12px; }
+.panel-row legend { font-weight: 600; padding: 0 6px; }
+
 .segmented { display: flex; gap: 8px; margin: 12px 0; }
 .segmented button { background: var(--panel); color: var(--ink); border-color: var(--line); }
 .segmented button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }

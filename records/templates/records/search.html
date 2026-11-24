@@ -1,0 +1,36 @@
+{% extends "records/base.html" %}
+{% block content %}
+  <h1>{{ title }}</h1>
+  <form method="get" class="record-form compact" role="search">
+    <div class="field">
+      <label for="q">Search records</label>
+      <input class="input" id="q" name="q" value="{{ query }}" autocomplete="off">
+    </div>
+    <div class="actions"><button class="button" type="submit">Search</button></div>
+  </form>
+
+  {% if query %}
+    {% if results %}
+      <ul class="plain">
+        {% for row in results %}
+          <li class="strip">
+            <a href="{{ row.url }}">{{ row.text }}</a>
+            <p class="hint">{{ row.kind }}</p>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">
+        {% if offset %}No more matches.{% else %}No record contains that text.{% endif %}
+      </p>
+    {% endif %}
+
+    {% if more or back or all_url %}
+      <nav class="pager" aria-label="More matches">
+        {% if back %}<a href="{{ back }}">Previous matches</a>{% endif %}
+        {% for row in more %}<a href="{{ row.url }}">More matches in {{ row.label }}</a>{% endfor %}
+        {% if all_url %}<a href="{{ all_url }}">Back to all matches</a>{% endif %}
+      </nav>
+    {% endif %}
+  {% endif %}
+{% endblock %}

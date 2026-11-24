@@ -1,9 +1,14 @@
 """Server-rendered UI: GET renders, POST validates and redirects (303)."""
 
+import json
+import zipfile
 from datetime import date, datetime
 from decimal import Decimal
 from functools import partial
+from io import BytesIO
+from urllib.parse import urlencode
 
+from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import views as auth_views
@@ -11,7 +16,10 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
-from django.db.models import ProtectedError, Q
+from django.core.serializers.json import DjangoJSONEncoder
+from django.db import transaction
+from django.db.models import Count, Min, ProtectedError, Q
+from django.forms import formset_factory
 from django.http import (
     Http404,
     HttpResponse,
@@ -630,6 +638,212 @@ def resource_views(slug, config):
 RESOURCE_VIEWS = {slug: resource_views(slug, config) for slug, config in RESOURCES.items()}
 
 
+# --- Labs: one panel page per panel, analytes added in a single form --------------------
+
+
+def _lab_group(user, row):
+    """A panel is the rows sharing a name and a collection time."""
+    return M.Lab._default_manager.filter(user=user, panel=row.panel, collected_at=row.collected_at)
+
+
+def _reference(lab):
+    low, high = lab.ref_low, lab.ref_high
+    if low is not None and high is not None:
+        return f"{display(lab, 'ref_low')}–{display(lab, 'ref_high')}"
+    if high is not None:
+        return f"<{display(lab, 'ref_high')}"
+    return f">{display(lab, 'ref_low')}" if low is not None else ""
+
+
+def _when(value):
+    return timezone.localtime(value).strftime("%Y-%m-%d %H:%M") if value else "\u2014"
+
+
+def _previous_lab_panel(user, panel):
+    """The newest saved panel with this name, ordered by analyte."""
+    if not panel:
+        return []
+    newest = (
+        M.Lab._default_manager.filter(user=user, panel=panel)
+        .order_by("-collected_at")
+        .values_list("collected_at", flat=True)
+        .first()
+    )
+    if newest is None:
+        return []
+    return list(
+        M.Lab._default_manager.filter(user=user, panel=panel, collected_at=newest).order_by(
+            "analyte"
+        )
+    )
+
+
+@login_required
+def labs_list(request):
+    panels = (
+        M.Lab._default_manager.filter(user=request.user)
+        .values("panel", "collected_at")
+        .annotate(count=Count("id"), first=Min("id"))
+        .order_by("-collected_at", "panel")
+    )
+    page = Paginator(list(panels), 50).get_page(request.GET.get("page"))
+    params = request.GET.copy()
+    params.pop("page", None)
+    return render(
+        request,
+        "records/labs_list.html",
+        {
+            "title": "Labs",
+            "domain": "labs",
+            "page_obj": page,
+            "pager_query": params.urlencode(),
+            "panels": [
+                {
+                    "panel": row["panel"],
+                    "collected_at": _when(row["collected_at"]),
+                    "count": row["count"],
+                    "url": reverse("records:labs_detail", args=[row["first"]]),
+                }
+                for row in page.object_list
+            ],
+            "state": M.domain_state(request.user, "labs"),
+        },
+    )
+
+
+@login_required
+def labs_detail(request, pk):
+    row = get_object_or_404(M.Lab._default_manager.filter(user=request.user), pk=pk)
+    return render(
+        request,
+        "records/labs_detail.html",
+        {
+            "title": row.panel,
+            "lab_name": row.lab_name,
+            "collected_at": _when(row.collected_at),
+            "fasting": {None: "\u2014", True: "Yes", False: "No"}[row.fasting],
+            "rows": [
+                {
+                    "analyte": lab.analyte,
+                    "value": display(lab, "value") if lab.value is not None else lab.value_text,
+                    "unit": lab.unit,
+                    "reference": _reference(lab),
+                    "edit_url": reverse("records:labs_edit", args=[lab.pk]),
+                    "delete_url": reverse("records:labs_delete", args=[lab.pk]),
+                }
+                for lab in _lab_group(request.user, row).order_by("analyte")
+            ],
+        },
+    )
+
+
+LabAnalyteFormSet = formset_factory(F.LabAnalyteForm, extra=12)
+
+
+@login_required
+def labs_new(request):
+    user = request.user
+    panel_name = request.GET.get("panel", "").strip()
+    if not panel_name:
+        latest = M.Lab._default_manager.filter(user=user).order_by("-collected_at").first()
+        panel_name = latest.panel if latest else ""
+    previous = _previous_lab_panel(user, panel_name)
+    initial = {"panel": panel_name}
+    if previous:
+        initial.update(lab_name=previous[0].lab_name, fasting=previous[0].fasting)
+    panel_form = F.LabPanelForm(request.POST or None, initial=initial)
+    formset = LabAnalyteFormSet(
+        request.POST or None,
+        prefix="analyte",
+        initial=[
+            {
+                "analyte": lab.analyte,
+                "unit": lab.unit,
+                "ref_low": lab.ref_low,
+                "ref_high": lab.ref_high,
+            }
+            for lab in previous
+        ],
+    )
+    # A prefilled row the owner did not touch is not a row; only changed rows are validated.
+    for form in formset.forms:
+        form.empty_permitted = form.empty_permitted or not form.has_changed()
+    error = None
+    if request.method == "POST" and panel_form.is_valid() and formset.is_valid():
+        rows = [form for form in formset.forms if form.has_changed()]
+        if not rows:
+            error = "Add at least one analyte."
+        else:
+            with transaction.atomic():
+                first = None
+                for form in rows:
+                    lab = form.save(commit=False)
+                    lab.user = user
+                    lab.panel = panel_form.cleaned_data["panel"]
+                    lab.collected_at = panel_form.cleaned_data["collected_at"]
+                    lab.lab_name = panel_form.cleaned_data["lab_name"]
+                    lab.fasting = panel_form.cleaned_data["fasting"]
+                    lab.save()
+                    first = first or lab
+            audit(user, "create", "records.Lab", first.pk)
+            messages.success(request, "Panel saved.")
+            return see_other(reverse("records:labs_detail", args=[first.pk]))
+    if error:
+        messages.error(request, error)
+    return render(
+        request,
+        "records/labs_form.html",
+        {
+            "title": "Add a lab panel",
+            "panel_form": panel_form,
+            "formset": formset,
+            "known_panels": M.Lab._default_manager.filter(user=user)
+            .values_list("panel", flat=True)
+            .distinct()
+            .order_by("panel"),
+            "cancel_url": reverse("records:labs_list"),
+        },
+    )
+
+
+class LabUpdate(RecordUpdate):
+    """Editing a result's panel metadata edits the panel, so the header cannot disagree."""
+
+    model = M.Lab
+    form_class = F.LabForm
+    title = "Edit result"
+    success_url_name = "records:labs_detail"
+
+    def form_valid(self, form):
+        # The row and its siblings are one write: two overlapping edits of the same panel
+        # must not leave rows with different lab names.
+        with transaction.atomic():
+            response = super().form_valid(form)
+            M.Lab._default_manager.filter(
+                user=self.request.user,
+                panel=self.object.panel,
+                collected_at=self.object.collected_at,
+            ).exclude(pk=self.object.pk).update(
+                lab_name=self.object.lab_name,
+                fasting=self.object.fasting,
+                updated_at=timezone.now(),
+            )
+        return response
+
+
+LabEdit = LabUpdate.as_view()
+
+LabDelete = type(
+    "labs_delete",
+    (RecordDelete,),
+    {
+        "model": M.Lab,
+        "title": "Delete result",
+        "success_url_name": "records:labs_list",
+    },
+).as_view()
+
+
 # --- Dashboard and context singletons --------------------------------------------------
 
 
@@ -714,9 +928,15 @@ def environment(request):
 
 @login_required
 def program(request):
-    instance = M.Program._default_manager.filter(user=request.user).order_by(
-        "-started", "-created_at"
-    ).first() or M.Program(user=request.user)
+    wanted = request.GET.get("id", "")
+    if wanted.isdigit():
+        instance = get_object_or_404(
+            M.Program._default_manager.filter(user=request.user), pk=int(wanted)
+        )
+    else:
+        instance = M.Program._default_manager.filter(user=request.user).order_by(
+            "-started", "-created_at"
+        ).first() or M.Program(user=request.user)
     return _singleton_form(
         request, F.ProgramForm, instance, "Programme", "records:program", "records.Program"
     )
@@ -751,6 +971,7 @@ DOMAIN_URLS = {
     "symptoms": "records:symptoms_list",
     "checkins": "records:checkins_list",
     "notes": "records:notes_list",
+    "labs": "records:labs_list",
     "memory": "records:memory_list",
 }
 
@@ -1305,6 +1526,203 @@ def audit_log(request):
         title="Audit",
     )
     return render(request, "records/audit.html", context)
+
+
+# --- Export, purge, search and llms.txt -----------------------------------------------
+
+# Tokens hold credential material and the audit trail holds no records, so neither is
+# exported or purged with the health data.
+SKIPPED_MODELS = (M.ApiToken, M.AuditEvent)
+
+
+def data_models():
+    """Every owner-scoped record model, in app order."""
+    return [
+        model
+        for model in apps.get_app_config("records").get_models()
+        if model not in SKIPPED_MODELS
+    ]
+
+
+@login_required
+def export_data(request):
+    user = request.user
+    # One snapshot: a concurrent write must not leave the zip with a dose whose course is
+    # missing. SQLite's IMMEDIATE transaction mode takes the writer lock for the whole read.
+    with transaction.atomic():
+        payload = {
+            "exported_at": timezone.now().isoformat(),
+            "app_version": settings.APP_VERSION,
+            "registry_version": R.REGISTRY_VERSION,
+            "tables": {
+                model._meta.label: [
+                    {
+                        field.name: field.value_from_object(obj)
+                        for field in model._meta.concrete_fields
+                    }
+                    for obj in model._default_manager.filter(user=user)
+                ]
+                for model in data_models()
+            },
+        }
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "health-info-export.json",
+            json.dumps(payload, cls=DjangoJSONEncoder, indent=1),
+        )
+    audit(user, "export", "records", detail={"tables": len(payload["tables"])})
+    response = HttpResponse(buffer.getvalue(), content_type="application/zip")
+    response["Content-Disposition"] = 'attachment; filename="health-info-export.zip"'
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+@login_required
+def purge(request):
+    if request.method != "POST":
+        return render(request, "records/purge.html", {"title": "Delete all health data"})
+    if request.POST.get("confirm") != "purge":
+        messages.error(request, "Type purge to confirm.")
+        return see_other(reverse("records:purge"))
+    user = request.user
+    counts = {}
+    with transaction.atomic():
+        # PROTECT: dose events block their course, corrections block the claim they correct.
+        memory = M.MemoryEntry._default_manager.filter(user=user)
+        memory.update(corrects=None)
+        order = [M.MemoryEntry, M.DoseEvent] + [
+            model for model in data_models() if model not in (M.MemoryEntry, M.DoseEvent)
+        ]
+        for model in order:
+            deleted, _ = model._default_manager.filter(user=user).delete()
+            if deleted:
+                counts[model._meta.label] = deleted
+    audit(user, "purge", "records", detail={"counts": counts})
+    messages.success(request, "All health records deleted.")
+    return see_other(reverse("records:dashboard"))
+
+
+SEARCH_LIMIT = 10
+
+# (model, searched fields, page, how the page addresses this row): None takes the row's pk,
+# "" is a page with no identity of its own, "?id={pk}" is a page that shows the named row.
+# Free text only: no codes and no JSON fields.
+SEARCH_TARGETS = (
+    (M.MemoryEntry, ("statement", "subject"), "records:memory_detail", None),
+    (M.Note, ("body",), "records:notes_detail", None),
+    (M.Symptom, ("name", "trigger", "note"), "records:symptoms_detail", None),
+    (M.Condition, ("name", "code", "note", "abatement"), "records:conditions_detail", None),
+    (M.Injury, ("mechanism", "rehab"), "records:injuries_detail", None),
+    (M.Allergy, ("substance", "reaction", "note"), "records:allergies_detail", None),
+    (
+        M.Medication,
+        ("substance", "indication", "purpose_note"),
+        "records:medications_detail",
+        None,
+    ),
+    (M.Vaccination, ("vaccine", "lot", "site"), "records:vaccinations_detail", None),
+    (M.Lab, ("panel", "analyte", "lab_name"), "records:labs_detail", None),
+    (M.Measurement, ("note", "device"), "records:measurements_detail", None),
+    (
+        M.Appointment,
+        ("practitioner_name", "place", "reason", "outcome_note"),
+        "records:appointments_detail",
+        None,
+    ),
+    (M.Period, ("note",), "records:periods_detail", None),
+    (M.Checkin, ("note",), "records:checkins_detail", None),
+    (
+        M.Practitioner,
+        ("name", "specialty", "organisation", "contact"),
+        "records:practitioners_detail",
+        None,
+    ),
+    (M.Goal, ("note",), "records:goals_detail", None),
+    (M.Program, ("name", "phase", "progression"), "records:program", "?id={pk}"),
+    (M.Environment, ("notes",), "records:environment", ""),
+)
+
+
+def _search_hits(user, model, fields, query, offset):
+    condition = Q()
+    for name in fields:
+        condition |= Q(**{f"{name}__icontains": query})
+    return model._default_manager.filter(user=user).filter(condition)[
+        offset : offset + SEARCH_LIMIT + 1
+    ]
+
+
+@login_required
+def search(request):
+    query = request.GET.get("q", "").strip()
+    kind = request.GET.get("kind", "")
+    raw_offset = request.GET.get("offset", "0")
+    offset = int(raw_offset) if raw_offset.isdigit() else 0
+    results = []
+    more = []
+    search_url = reverse("records:search")
+    if query:
+        for model, fields, url_name, address in SEARCH_TARGETS:
+            if kind and kind != url_name:
+                continue
+            hits = list(_search_hits(request.user, model, fields, query, offset))
+            for obj in hits[:SEARCH_LIMIT]:
+                results.append(
+                    {
+                        "text": str(obj),
+                        "kind": model._meta.verbose_name,
+                        "url": reverse(url_name, args=[obj.pk])
+                        if address is None
+                        else reverse(url_name) + address.format(pk=obj.pk),
+                    }
+                )
+            if len(hits) > SEARCH_LIMIT:
+                more.append(
+                    {
+                        "label": model._meta.verbose_name_plural,
+                        "url": search_url
+                        + "?"
+                        + urlencode(
+                            {"q": query, "kind": url_name, "offset": offset + SEARCH_LIMIT}
+                        ),
+                    }
+                )
+    back = (
+        search_url
+        + "?"
+        + urlencode({"q": query, "kind": kind, "offset": max(0, offset - SEARCH_LIMIT)})
+        if kind and offset
+        else ""
+    )
+    return render(
+        request,
+        "records/search.html",
+        {
+            "title": "Search",
+            "query": query,
+            "results": results,
+            "more": more,
+            "kind": kind,
+            "offset": offset,
+            "back": back,
+            "all_url": search_url + "?" + urlencode({"q": query}) if kind else "",
+        },
+    )
+
+
+@login_required
+def llms_txt(request):
+    return render(
+        request,
+        "records/llms.txt",
+        {
+            "base_url": request.build_absolute_uri("/api/v1"),
+            "app_version": settings.APP_VERSION,
+            "registry_version": R.REGISTRY_VERSION,
+        },
+        content_type="text/plain; charset=utf-8",
+    )
 
 
 # --- Session auth ---------------------------------------------------------------------

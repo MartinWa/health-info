@@ -19,6 +19,8 @@
           <a href="{% url 'records:timeline' %}">Timeline</a>
           <a href="{% url 'records:memory_list' %}">Memory</a>
           <a href="{% url 'records:regimen' %}">Regimen</a>
+          <a href="{% url 'records:labs_list' %}">Labs</a>
+          <a href="{% url 'records:search' %}">Search</a>
         </nav>
         <details class="user-menu">
           <summary>{{ user.get_username }}</summary>
@@ -34,6 +36,7 @@
             <a href="{% url 'records:vaccinations_list' %}">Vaccinations</a>
             <a href="{% url 'records:practitioners_list' %}">Practitioners</a>
             <a href="{% url 'records:appointments_list' %}">Appointments</a>
+            <a href="{% url 'records:labs_list' %}">Labs</a>
             <a href="{% url 'records:measurements_list' %}">Measurements</a>
             <a href="{% url 'records:symptoms_list' %}">Symptoms</a>
             <a href="{% url 'records:checkins_list' %}">Check-ins</a>

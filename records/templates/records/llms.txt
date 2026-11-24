@@ -1,0 +1,57 @@
+# health-info
+
+One household's self-hosted health records. Authored data only: no charts, no scores, no
+device series. Version {{ app_version }}, registry version {{ registry_version }}.
+
+## API
+
+Base URL: {{ base_url }}
+
+- `Authorization: Bearer <token>` on every request. Tokens are issued on the Tokens page.
+- JSON only. No CORS. `Cache-Control: no-store`.
+- Every success carries the envelope keys `contract_version`, `generated_at`,
+  `registry_version` beside the payload.
+- Collections page with `limit` (default 50, max 1000) and `offset`, and accept `start`/`end`
+  (inclusive dates, default the last 30 days). Rows live under `items`.
+- Errors: `{"error": {"code", "message", "details": [{"path", "message"}]}}`. Ids from another
+  account are `404`, never `403`.
+- The full contract is at `{{ base_url }}/openapi.json` and `{{ base_url }}/docs`.
+
+## Reads
+
+`person`, `environment`, `periods`, `goals`, `programs`, `conditions`, `injuries`,
+`allergies`, `medications`, `labs`, `vaccinations`, `practitioners`, `appointments`,
+`dose-events`, `measurements`, `symptoms`, `checkins`, `notes`, `memory`.
+
+Derived: `expected-doses` (one row per due slot, each with the `scheduled_for` to post back),
+`adherence` (`?medication_id&start&end`), `summary` (one compact bundle: person age, goals,
+programme, environment, constraints with a per-domain `state`, availability, missing domains,
+memory counts), `health`.
+
+## Writes
+
+Writable by token: memory, notes, periods, symptoms, injuries, conditions, measurements,
+dose-events, appointments, check-ins, goals, programmes, environment.
+
+UI-only: identity (`/person`), medication plan, allergies, labs, vaccinations, practitioners.
+
+- `POST` returns `201` with `Location`; `PATCH` returns the full resource; `DELETE` is `204`.
+- Clients never set `verification_status`; a client injury or condition lands `unconfirmed`
+  until the owner confirms it. A client appointment lands `planned`.
+- Memory: read it before writing. One claim per entry, the owner's wording, no diagnoses, no
+  transcripts, no third-party data. A changed claim is a new entry with `corrects_id`, not an
+  edit. `locked` entries are read-only.
+- A repeated dose event with the same `medication_id` and `scheduled_for` returns the existing
+  row with `200`, so a retry is safe.
+
+## Vocabulary
+
+Metric codes, enums and units are fixed in the server registry
+(`registry_version {{ registry_version }}`). Metric aliases resolve on input; responses always
+carry the canonical code. A reading outside the plausible range is stored with a `warnings`
+list; outside the hard range it is rejected.
+
+## Not this service
+
+Device or series aggregation, reminders, interpretation, scores, streaks, food logging,
+client accounts, an admin data API.
