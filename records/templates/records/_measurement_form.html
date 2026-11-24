@@ -1,0 +1,43 @@
+{% if at_default %}<input type="hidden" name="at_default" value="{{ at_default }}">{% endif %}
+{% if form.non_field_errors %}
+  <div class="errors" role="alert">{{ form.non_field_errors }}</div>
+{% endif %}
+
+<div class="bp-pair">
+  <div class="field{% if form.systolic.errors %} invalid{% endif %}">
+    <label for="{{ form.systolic.id_for_label }}">Systolic <span class="muted">mmHg</span></label>
+    {{ form.systolic }}
+    {% if form.systolic.errors %}<div class="errors" role="alert">{{ form.systolic.errors }}</div>{% endif %}
+  </div>
+  <div class="field{% if form.diastolic.errors %} invalid{% endif %}">
+    <label for="{{ form.diastolic.id_for_label }}">Diastolic <span class="muted">mmHg</span></label>
+    {{ form.diastolic }}
+    {% if form.diastolic.errors %}<div class="errors" role="alert">{{ form.diastolic.errors }}</div>{% endif %}
+  </div>
+</div>
+
+<div class="field{% if form.pulse.errors %} invalid{% endif %}">
+  <label for="{{ form.pulse.id_for_label }}">Pulse <span class="muted">/min, optional</span></label>
+  {{ form.pulse }}
+  {% if form.pulse.errors %}<div class="errors" role="alert">{{ form.pulse.errors }}</div>{% endif %}
+</div>
+
+<p class="bp-note">Tap the numbers to edit. Both pressure values are required; pulse can be left empty.</p>
+
+{% include "records/_pills.html" with field=form.side %}
+{% include "records/_pills.html" with field=form.posture %}
+{% include "records/_pills.html" with field=form.fasted %}
+
+<details class="details-panel"{% if form.at.errors or form.note.errors %} open{% endif %}>
+  <summary>Add time or note</summary>
+  <div class="field{% if form.at.errors %} invalid{% endif %}">
+    <label for="{{ form.at.id_for_label }}">{{ form.at.label }}</label>
+    {{ form.at }}
+    {% if form.at.errors %}<div class="errors" role="alert">{{ form.at.errors }}</div>{% endif %}
+  </div>
+  <div class="field{% if form.note.errors %} invalid{% endif %}">
+    <label for="{{ form.note.id_for_label }}">Note <span class="muted">optional</span></label>
+    {{ form.note }}
+    {% if form.note.errors %}<div class="errors" role="alert">{{ form.note.errors }}</div>{% endif %}
+  </div>
+</details>

@@ -1,31 +1,38 @@
 {% extends "records/base.html" %}
 {% block content %}
   <div class="page-head">
-    <h1>{{ title }}</h1>
-    <a class="button" href="{% url 'records:memory_new' %}">Add</a>
+    <div>
+      <span class="card-eyebrow">Memory</span>
+      <h1>{{ title }}</h1>
+    </div>
+    <div class="page-actions">
+      <a class="button" href="{% url 'records:memory_new' %}">Add</a>
+    </div>
   </div>
 
   {% if entries %}
-    <ul class="plain">
-      {% for entry in entries %}
-        <li class="strip">
-          <a href="{% url 'records:memory_detail' entry.pk %}">{{ entry.statement }}</a>
-          <p class="hint">
-            {{ entry.get_kind_display }} · {{ entry.subject }} · {{ entry.observed_at|date:"j M Y" }}
-            {% if entry.pinned %}· pinned{% endif %}
-            {% if entry.locked %}· locked{% endif %}
-            {% if entry.status != "active" %}· {{ entry.get_status_display }}{% endif %}
-            {% if entry.source != "owner" %}· {{ entry.reported_by|default:entry.source }}{% endif %}
-          </p>
-        </li>
-      {% endfor %}
-    </ul>
+    <div class="card">
+      <ul class="plain stacked">
+        {% for entry in entries %}
+          <li>
+            <a href="{% url 'records:memory_detail' entry.pk %}">{{ entry.statement }}</a>
+            <p class="hint">
+              {{ entry.get_kind_display }} · {{ entry.subject }} · {{ entry.observed_at|date:"j M Y" }}
+              {% if entry.pinned %}· pinned{% endif %}
+              {% if entry.locked %}· locked{% endif %}
+              {% if entry.status != "active" %}· {{ entry.get_status_display }}{% endif %}
+              {% if entry.source != "owner" %}· {{ entry.reported_by|default:entry.source }}{% endif %}
+            </p>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
     {% include "records/pager.html" %}
   {% else %}
-    <p class="empty">Nothing recorded yet.</p>
+    <div class="card"><p class="empty">Nothing recorded yet.</p></div>
   {% endif %}
 
-  <form method="get" class="record-form compact" aria-label="Filter memory">
+  <form method="get" class="record-form compact" style="margin-top: 24px" aria-label="Filter memory">
     <div class="field">
       <label for="q">Search</label>
       <input class="input" id="q" name="q" value="{{ filters.q }}">

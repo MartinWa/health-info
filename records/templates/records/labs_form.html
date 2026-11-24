@@ -1,7 +1,14 @@
 {% extends "records/base.html" %}
 {% block content %}
-  <h1>{{ title }}</h1>
-  <form method="post" class="record-form" novalidate>
+  <div class="page-head">
+    <div>
+      <span class="card-eyebrow">Blood work</span>
+      <h1>{{ title }}</h1>
+      <p class="subtitle">One panel, several analytes. Units and reference bounds prefill from the last panel with the same name.</p>
+    </div>
+  </div>
+
+  <form method="post" class="record-form" style="max-width: 760px" novalidate>
     {% csrf_token %}
     {% if panel_form.non_field_errors %}
       <div class="errors" role="alert">{{ panel_form.non_field_errors }}</div>
@@ -42,7 +49,7 @@
   </form>
 
   {% if known_panels %}
-    <nav class="filters" aria-label="Prefill from a previous panel">
+    <nav class="filters" style="margin-top: 20px" aria-label="Prefill from a previous panel">
       {% for name in known_panels %}
         <a href="{% url 'records:labs_new' %}?panel={{ name|urlencode }}">{{ name }}</a>
       {% endfor %}

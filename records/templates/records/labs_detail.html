@@ -1,37 +1,48 @@
 {% extends "records/base.html" %}
 {% block content %}
   <div class="page-head">
-    <h1>{{ title }}</h1>
-    <a class="button" href="{% url 'records:labs_new' %}?panel={{ title|urlencode }}">New panel, prefilled</a>
+    <div>
+      <span class="card-eyebrow">Lab panel</span>
+      <h1>{{ title }}</h1>
+    </div>
+    <div class="page-actions">
+      <a class="button" href="{% url 'records:labs_new' %}?panel={{ title|urlencode }}">New panel, prefilled</a>
+    </div>
   </div>
 
-  <dl class="detail">
-    <div><dt>Collected</dt><dd>{{ collected_at }}</dd></div>
-    <div><dt>Lab</dt><dd>{{ lab_name|default:"—" }}</dd></div>
-    <div><dt>Fasting</dt><dd>{{ fasting }}</dd></div>
-  </dl>
+  <div class="stack">
+    <div class="card">
+      <dl class="detail">
+        <div><dt>Collected</dt><dd>{{ collected_at }}</dd></div>
+        <div><dt>Lab</dt><dd>{{ lab_name|default:"—" }}</dd></div>
+        <div><dt>Fasting</dt><dd>{{ fasting }}</dd></div>
+      </dl>
+    </div>
 
-  <table class="records">
-    <thead>
-      <tr><th scope="col">Analyte</th><th scope="col">Value</th><th scope="col">Unit</th><th scope="col">Reference</th><th scope="col"><span class="visually-hidden">Row</span></th></tr>
-    </thead>
-    <tbody>
-      {% for row in rows %}
-        <tr>
-          <td data-label="Analyte">{{ row.analyte }}</td>
-          <td data-label="Value">{{ row.value }}</td>
-          <td data-label="Unit">{{ row.unit }}</td>
-          <td data-label="Reference">{{ row.reference }}</td>
-          <td class="row-actions">
-            <a href="{{ row.edit_url }}">Edit</a>
-            <a href="{{ row.delete_url }}">Delete</a>
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+    <div class="table-wrap">
+      <table class="records">
+        <thead>
+          <tr><th scope="col">Analyte</th><th scope="col">Value</th><th scope="col">Unit</th><th scope="col">Reference</th><th scope="col"><span class="visually-hidden">Row</span></th></tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td data-label="Analyte">{{ row.analyte }}</td>
+              <td data-label="Value">{{ row.value }}</td>
+              <td data-label="Unit">{{ row.unit }}</td>
+              <td data-label="Reference">{{ row.reference }}</td>
+              <td class="row-actions">
+                <a href="{{ row.edit_url }}">Edit</a>
+                <a href="{{ row.delete_url }}">Delete</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
 
-  <div class="actions">
-    <a class="button quiet" href="{% url 'records:labs_list' %}">Back to labs</a>
+    <div class="actions">
+      <a class="button quiet" href="{% url 'records:labs_list' %}">Back to labs</a>
+    </div>
   </div>
 {% endblock %}

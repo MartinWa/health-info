@@ -1,11 +1,15 @@
 {% extends "records/base.html" %}
 {% block content %}
   <div class="page-head">
-    <h1>Memory entry</h1>
+    <div>
+      <span class="card-eyebrow">Memory</span>
+      <h1>Memory entry</h1>
+    </div>
     {% if entry.source != "owner" %}
       <span class="badge">{% if entry.reported_by %}{{ entry.reported_by }}{% else %}{{ entry.source }}{% endif %}</span>
     {% endif %}
   </div>
+  <div class="card">
   <p class="statement">{{ entry.statement }}</p>
   <dl class="detail">
     <div><dt>Kind</dt><dd>{{ entry.get_kind_display }}</dd></div>
@@ -40,6 +44,7 @@
       </form>
     {% endif %}
     <a class="button danger" href="{% url 'records:memory_delete' entry.pk %}">Forget</a>
+  </div>
   </div>
 
   {% if ancestors %}

@@ -1,6 +1,11 @@
 {% extends "records/base.html" %}
 {% block content %}
-  <h1>{{ title }}</h1>
+  <div class="page-head">
+    <div>
+      <span class="card-eyebrow">API access</span>
+      <h1>{{ title }}</h1>
+    </div>
+  </div>
 
   {% if new_token %}
     <section class="strip" aria-labelledby="new-token-heading">
@@ -24,31 +29,33 @@
   </form>
 
   {% if rows %}
-    <table class="records">
-      <thead>
-        <tr><th scope="col">Name</th><th scope="col">Prefix</th><th scope="col">Issued</th><th scope="col">Last used</th><th scope="col">Expires</th><th scope="col">State</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr>
-      </thead>
-      <tbody>
-        {% for token in rows %}
-          <tr>
-            <td data-label="Name">{{ token.name }}</td>
-            <td data-label="Prefix">{{ token.prefix }}…</td>
-            <td data-label="Issued">{{ token.created_at|date:"j M Y" }}</td>
-            <td data-label="Last used">{{ token.last_used_at|date:"j M Y"|default:"never" }}</td>
-            <td data-label="Expires">{{ token.expires_at|date:"j M Y"|default:"—" }}</td>
-            <td data-label="State">{% if token.revoked_at %}revoked{% else %}active{% endif %}</td>
-            <td class="row-actions">
-              {% if not token.revoked_at %}
-                <form method="post" action="{% url 'records:token_revoke' token.pk %}" class="inline">
-                  {% csrf_token %}
-                  <button class="button quiet">Revoke</button>
-                </form>
-              {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-wrap" style="margin-top: 24px">
+      <table class="records">
+        <thead>
+          <tr><th scope="col">Name</th><th scope="col">Prefix</th><th scope="col">Issued</th><th scope="col">Last used</th><th scope="col">Expires</th><th scope="col">State</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr>
+        </thead>
+        <tbody>
+          {% for token in rows %}
+            <tr>
+              <td data-label="Name">{{ token.name }}</td>
+              <td data-label="Prefix">{{ token.prefix }}…</td>
+              <td data-label="Issued">{{ token.created_at|date:"j M Y" }}</td>
+              <td data-label="Last used">{{ token.last_used_at|date:"j M Y"|default:"never" }}</td>
+              <td data-label="Expires">{{ token.expires_at|date:"j M Y"|default:"—" }}</td>
+              <td data-label="State">{% if token.revoked_at %}revoked{% else %}active{% endif %}</td>
+              <td class="row-actions">
+                {% if not token.revoked_at %}
+                  <form method="post" action="{% url 'records:token_revoke' token.pk %}" class="inline">
+                    {% csrf_token %}
+                    <button class="button quiet small">Revoke</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   {% else %}
     <p class="empty">No tokens issued.</p>
   {% endif %}

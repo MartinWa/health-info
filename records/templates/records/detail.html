@@ -1,18 +1,24 @@
 {% extends "records/base.html" %}
 {% block content %}
   <div class="page-head">
-    <h1>{{ title }}</h1>
+    <div>
+      <span class="card-eyebrow">Record</span>
+      <h1>{{ title }}</h1>
+    </div>
     {% if source != "owner" %}<span class="badge">{% if reported_by %}{{ reported_by }}{% else %}{{ source }}{% endif %}</span>{% endif %}
   </div>
-  <dl class="detail">
-    {% for label, value in rows %}
-      <div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>
-    {% endfor %}
-  </dl>
-  <div class="actions">
-    {% if edit_url %}<a class="button" href="{{ edit_url }}">Edit</a>{% endif %}
-    {% for label, url in detail_actions %}<a class="button quiet" href="{{ url }}">{{ label }}</a>{% endfor %}
-    {% if delete_url %}<a class="button danger" href="{{ delete_url }}">Delete</a>{% endif %}
-    <a class="button quiet" href="javascript:history.back()">Back</a>
+
+  <div class="card">
+    <dl class="detail">
+      {% for label, value in rows %}
+        <div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>
+      {% endfor %}
+    </dl>
+    <div class="actions">
+      {% if edit_url %}<a class="button" href="{{ edit_url }}">Edit</a>{% endif %}
+      {% for label, url in detail_actions %}<a class="button quiet" href="{{ url }}">{{ label }}</a>{% endfor %}
+      {% if delete_url %}<a class="button danger" href="{{ delete_url }}">Delete</a>{% endif %}
+      <a class="button ghost" href="javascript:history.back()">Back</a>
+    </div>
   </div>
 {% endblock %}

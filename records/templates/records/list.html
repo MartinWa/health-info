@@ -1,8 +1,13 @@
 {% extends "records/base.html" %}
 {% block content %}
   <div class="page-head">
-    <h1>{{ title }}</h1>
-    {% if new_url %}<a class="button" href="{{ new_url }}">Add</a>{% endif %}
+    <div>
+      <span class="card-eyebrow">Record</span>
+      <h1>{{ title }}</h1>
+    </div>
+    <div class="page-actions">
+      {% if new_url %}<a class="button" href="{{ new_url }}">Add</a>{% endif %}
+    </div>
   </div>
 
   {% if domain and not rows %}
@@ -21,22 +26,24 @@
   </nav>
 
   {% if rows %}
-    <table class="records">
-      <thead>
-        <tr>{% for label in column_labels %}<th scope="col">{{ label }}</th>{% endfor %}<th scope="col"><span class="visually-hidden">Record</span></th></tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}
-          <tr>
-            {% for cell in row.cells %}<td data-label="{{ column_labels|slice:forloop.counter|last }}">{{ cell }}</td>{% endfor %}
-            <td class="row-actions">
-              {% if row.source != "owner" %}<span class="badge">{% if row.reported_by %}{{ row.reported_by }}{% else %}{{ row.source }}{% endif %}</span>{% endif %}
-              {% if row.detail_url %}<a href="{{ row.detail_url }}">Open</a>{% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table class="records">
+        <thead>
+          <tr>{% for label in column_labels %}<th scope="col">{{ label }}</th>{% endfor %}<th scope="col"><span class="visually-hidden">Record</span></th></tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              {% for cell in row.cells %}<td data-label="{{ column_labels|slice:forloop.counter|last }}">{{ cell }}</td>{% endfor %}
+              <td class="row-actions">
+                {% if row.source != "owner" %}<span class="badge">{% if row.reported_by %}{{ row.reported_by }}{% else %}{{ row.source }}{% endif %}</span>{% endif %}
+                {% if row.detail_url %}<a href="{{ row.detail_url }}">Open</a>{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% if is_paginated %}
       <nav class="pager" aria-label="Pagination">
         {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}{% if source_filter %}&source={{ source_filter }}{% endif %}">Newer</a>{% endif %}
@@ -45,6 +52,9 @@
       </nav>
     {% endif %}
   {% else %}
-    <p class="empty">{{ empty_text }}</p>
+    <div class="card">
+      <p class="empty">{{ empty_text }}</p>
+      {% if new_url %}<div class="actions"><a class="button" href="{{ new_url }}">Add the first one</a></div>{% endif %}
+    </div>
   {% endif %}
 {% endblock %}

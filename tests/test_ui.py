@@ -1,7 +1,7 @@
 """UI smoke: the survival surfaces, the segmented state control, no echoed values."""
 
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -217,3 +217,57 @@ def test_list_shows_a_badge_for_client_written_rows(user, logged_in):
 )
 def test_screens_render(name, logged_in):
     assert logged_in.get(reverse(name)).status_code == 200
+
+
+def test_a_pulse_row_without_a_value_does_not_break_the_dashboard(user, logged_in):
+    M.Measurement._default_manager.create(user=user, metric="pulse", value=None, at=timezone.now())
+    response = logged_in.get(reverse("records:dashboard"))
+    assert response.status_code == 200
+    assert "Pulse" in response.content.decode()
+
+
+def test_arm_and_posture_land_on_the_panel_and_its_components(user, logged_in):
+    response = logged_in.post(
+        reverse("records:quick_measurement"),
+        {
+            "systolic": 120,
+            "diastolic": 80,
+            "at": at(),
+            "side": "left",
+            "posture": "sitting",
+        },
+    )
+    assert response.status_code == 303
+    panel = M.Measurement._default_manager.get(user=user, metric="blood_pressure")
+    assert (panel.side, panel.posture) == ("left", "sitting")
+    assert set(panel.components.values_list("side", "posture")) == {("left", "sitting")}
+
+
+def test_an_untouched_measurement_time_is_stamped_again_at_submission(user, logged_in):
+    stale = "2026-11-02T08:00"
+    response = logged_in.post(
+        reverse("records:quick_measurement"),
+        {"systolic": 120, "diastolic": 80, "at": stale, "at_default": stale},
+    )
+    assert response.status_code == 303
+    panel = M.Measurement._default_manager.get(user=user, metric="blood_pressure")
+    assert abs(panel.at - timezone.now()) < timedelta(minutes=2)
+
+
+def test_a_chosen_measurement_time_is_kept(user, logged_in):
+    chosen = "2026-11-02T08:00"
+    response = logged_in.post(
+        reverse("records:quick_measurement"),
+        {"systolic": 120, "diastolic": 80, "at": chosen, "at_default": "2026-11-02T09:30"},
+    )
+    assert response.status_code == 303
+    panel = M.Measurement._default_manager.get(user=user, metric="blood_pressure")
+    assert timezone.localtime(panel.at).strftime("%Y-%m-%dT%H:%M") == chosen
+
+
+def test_a_missing_measurement_time_reopens_its_section(logged_in):
+    response = logged_in.post(
+        reverse("records:quick_measurement"), {"systolic": 120, "diastolic": 80, "at": ""}
+    )
+    assert response.status_code == 200
+    assert 'class="details-panel" open' in response.content.decode()

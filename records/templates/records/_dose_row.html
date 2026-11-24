@@ -1,0 +1,26 @@
+<li class="dose-row{% if slot.status %} is-{{ slot.status }}{% endif %}">
+  <div class="dose-main">
+    <span class="dose-name">{{ slot.substance }}</span>
+    <span class="dose-meta">
+      {{ slot.scheduled_for|time:"H:i" }}{% if slot.strength %} · {{ slot.strength }} {{ slot.unit }}{% endif %}
+    </span>
+  </div>
+  {% if slot.status == "taken" %}
+    <span class="dose-done">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg>
+      Taken
+    </span>
+  {% elif slot.status %}
+    <span class="pill pill-neutral">Skipped</span>
+  {% else %}
+    <form method="post" action="{% url 'records:quick_dose' %}" class="dose-actions" data-once>
+      {% csrf_token %}
+      <input type="hidden" name="medication_id" value="{{ slot.medication_id }}">
+      <input type="hidden" name="scheduled_for" value="{{ slot.scheduled_for|date:'c' }}">
+      <button type="submit" class="take-btn" name="status" value="taken" title="Mark as taken" aria-label="Mark {{ slot.substance }} at {{ slot.scheduled_for|time:'H:i' }} as taken">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg>
+      </button>
+      <button type="submit" class="skip-btn" name="status" value="skipped" aria-label="Mark {{ slot.substance }} at {{ slot.scheduled_for|time:'H:i' }} as skipped">Skip</button>
+    </form>
+  {% endif %}
+</li>

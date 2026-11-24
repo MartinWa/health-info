@@ -1,6 +1,12 @@
 {% extends "records/base.html" %}
 {% block content %}
-  <h1>{{ title }}</h1>
+  <div class="page-head">
+    <div>
+      <span class="card-eyebrow">Find</span>
+      <h1>{{ title }}</h1>
+    </div>
+  </div>
+
   <form method="get" class="record-form compact" role="search">
     <div class="field">
       <label for="q">Search records</label>
@@ -11,7 +17,7 @@
 
   {% if query %}
     {% if results %}
-      <ul class="plain">
+      <ul class="plain" style="margin-top: 24px">
         {% for row in results %}
           <li class="strip">
             <a href="{{ row.url }}">{{ row.text }}</a>

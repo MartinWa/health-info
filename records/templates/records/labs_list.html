@@ -1,33 +1,43 @@
 {% extends "records/base.html" %}
 {% block content %}
   <div class="page-head">
-    <h1>{{ title }}</h1>
-    <a class="button" href="{% url 'records:labs_new' %}">Add a panel</a>
+    <div>
+      <span class="card-eyebrow">Blood work</span>
+      <h1>{{ title }}</h1>
+    </div>
+    <div class="page-actions">
+      <a class="button" href="{% url 'records:labs_new' %}">Add a panel</a>
+    </div>
   </div>
 
   {% if panels %}
-    <table class="records">
-      <thead>
-        <tr><th scope="col">Panel</th><th scope="col">Collected</th><th scope="col">Results</th><th scope="col"><span class="visually-hidden">Open</span></th></tr>
-      </thead>
-      <tbody>
-        {% for row in panels %}
-          <tr>
-            <td data-label="Panel">{{ row.panel }}</td>
-            <td data-label="Collected">{{ row.collected_at }}</td>
-            <td data-label="Results">{{ row.count }}</td>
-            <td class="row-actions"><a href="{{ row.url }}">Open</a></td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table class="records">
+        <thead>
+          <tr><th scope="col">Panel</th><th scope="col">Collected</th><th scope="col">Results</th><th scope="col"><span class="visually-hidden">Open</span></th></tr>
+        </thead>
+        <tbody>
+          {% for row in panels %}
+            <tr>
+              <td data-label="Panel">{{ row.panel }}</td>
+              <td data-label="Collected">{{ row.collected_at }}</td>
+              <td data-label="Results">{{ row.count }}</td>
+              <td class="row-actions"><a href="{{ row.url }}">Open</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% include "records/pager.html" %}
   {% else %}
-    <form method="post" action="{% url 'records:state' domain %}" class="segmented" aria-label="Is this recorded?">
-      {% csrf_token %}
-      <button class="tap" name="state" value="unknown"{% if state == "unknown" %} aria-pressed="true"{% endif %}>Not asked yet</button>
-      <button class="tap" name="state" value="none"{% if state == "none" %} aria-pressed="true"{% endif %}>None</button>
-    </form>
-    <p class="empty">No lab results yet.</p>
+    <div class="card">
+      <form method="post" action="{% url 'records:state' domain %}" class="segmented" aria-label="Is this recorded?">
+        {% csrf_token %}
+        <button class="tap" name="state" value="unknown"{% if state == "unknown" %} aria-pressed="true"{% endif %}>Not asked yet</button>
+        <button class="tap" name="state" value="none"{% if state == "none" %} aria-pressed="true"{% endif %}>None</button>
+      </form>
+      <p class="empty">No lab results yet.</p>
+      <div class="actions"><a class="button" href="{% url 'records:labs_new' %}">Add the first panel</a></div>
+    </div>
   {% endif %}
 {% endblock %}

@@ -1,23 +1,30 @@
 {% extends "records/base.html" %}
 {% block content %}
-  <h1>{{ title }}</h1>
-  <p class="hint">Counts and file names only; never a value.</p>
+  <div class="page-head">
+    <div>
+      <span class="card-eyebrow">Account</span>
+      <h1>{{ title }}</h1>
+      <p class="subtitle">Counts and file names only; never a value.</p>
+    </div>
+  </div>
   {% if entries %}
-    <table class="records">
-      <thead>
-        <tr><th scope="col">When</th><th scope="col">Action</th><th scope="col">Record</th><th scope="col">Detail</th></tr>
-      </thead>
-      <tbody>
-        {% for event in entries %}
-          <tr>
-            <td data-label="When">{{ event.created_at|date:"j M Y H:i" }}</td>
-            <td data-label="Action">{{ event.action }}</td>
-            <td data-label="Record">{{ event.object_kind }}{% if event.object_id %} #{{ event.object_id }}{% endif %}</td>
-            <td data-label="Detail">{% for key, value in event.detail.items %}{{ key }}: {{ value }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table class="records">
+        <thead>
+          <tr><th scope="col">When</th><th scope="col">Action</th><th scope="col">Record</th><th scope="col">Detail</th></tr>
+        </thead>
+        <tbody>
+          {% for event in entries %}
+            <tr>
+              <td data-label="When">{{ event.created_at|date:"j M Y H:i" }}</td>
+              <td data-label="Action">{{ event.action }}</td>
+              <td data-label="Record">{{ event.object_kind }}{% if event.object_id %} #{{ event.object_id }}{% endif %}</td>
+              <td data-label="Detail">{% for key, value in event.detail.items %}{{ key }}: {{ value }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% include "records/pager.html" %}
   {% else %}
     <p class="empty">Nothing logged yet.</p>

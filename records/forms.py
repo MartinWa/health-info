@@ -525,20 +525,39 @@ class BloodPressureForm(forms.Form):
     systolic = forms.IntegerField(
         min_value=1,
         label="Systolic",
-        widget=forms.NumberInput(attrs={"inputmode": "numeric", "class": "input big"}),
+        widget=forms.NumberInput(
+            attrs={"inputmode": "numeric", "class": "input big", "placeholder": "120"}
+        ),
     )
     diastolic = forms.IntegerField(
         min_value=1,
         label="Diastolic",
-        widget=forms.NumberInput(attrs={"inputmode": "numeric", "class": "input big"}),
+        widget=forms.NumberInput(
+            attrs={"inputmode": "numeric", "class": "input big", "placeholder": "80"}
+        ),
     )
     pulse = forms.IntegerField(
         min_value=1,
         required=False,
-        widget=forms.NumberInput(attrs={"inputmode": "numeric", "class": "input big"}),
+        widget=forms.NumberInput(
+            attrs={"inputmode": "numeric", "class": "input big", "placeholder": "60"}
+        ),
     )
     at = LocalDateTimeField(label="Measured at")
     note = forms.CharField(max_length=200, required=False)
+    side = forms.ChoiceField(
+        label="Arm", choices=[("", "No arm"), ("left", "Left"), ("right", "Right")], required=False
+    )
+    posture = forms.ChoiceField(
+        label="Posture",
+        choices=[("", "No posture"), *[(value, value.capitalize()) for value in R.POSTURE]],
+        required=False,
+    )
+    fasted = forms.ChoiceField(
+        label="Fasting",
+        choices=[("", "Not recorded"), ("yes", "Fasted"), ("no", "Not fasted")],
+        required=False,
+    )
 
     def __init__(self, *args, user, **kwargs):
         self.user = user
@@ -565,9 +584,17 @@ class BloodPressureForm(forms.Form):
     @transaction.atomic
     def save(self):
         at = self.cleaned_data["at"]
-        note = self.cleaned_data.get("note") or ""
+        fasted = self.cleaned_data.get("fasted")
+        side = self.cleaned_data.get("side") or ""
+        posture = self.cleaned_data.get("posture") or ""
         panel = M.Measurement.objects.create(
-            user=self.user, metric="blood_pressure", at=at, note=note
+            user=self.user,
+            metric="blood_pressure",
+            at=at,
+            note=self.cleaned_data.get("note") or "",
+            side=side,
+            posture=posture,
+            fasted=None if not fasted else fasted == "yes",
         )
         for code in ("systolic_bp", "diastolic_bp"):
             metric = R.METRICS[code]
@@ -578,6 +605,9 @@ class BloodPressureForm(forms.Form):
                 unit=metric.unit,
                 at=at,
                 parent=panel,
+                # API-created readings carry the context on components too; match them.
+                side=side,
+                posture=posture,
             )
         if self.cleaned_data.get("pulse") is not None:
             M.Measurement.objects.create(

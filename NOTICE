@@ -10,3 +10,9 @@ the copyright holder; open a topic in the repository's Discussions to arrange on
 
 All data included in this repository is synthetic. No personal health data,
 accounts, tokens, hostnames, volume paths or backups are included.
+
+The UI self-hosts two typefaces under the SIL Open Font License 1.1:
+Inter (Copyright (c) 2016 The Inter Project Authors) and Plus Jakarta Sans
+(Copyright 2020 The Plus Jakarta Sans Project Authors). Their licence texts are
+in records/static/records/fonts/, and the unmodified woff2 subsets came from
+Google Fonts.

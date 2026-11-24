@@ -1,12 +1,49 @@
 {% extends "records/base.html" %}
 {% block content %}
-  <h1>Quick add</h1>
+  <div class="page-head">
+    <div>
+      <span class="card-eyebrow">Quick add</span>
+      <h1>What would you like to log?</h1>
+      <p class="subtitle">One short form per kind. Nothing else changes.</p>
+    </div>
+  </div>
+
   <ul class="quick-grid">
-    <li><a class="quick-tile" href="{% url 'records:quick_measurement' %}"><strong>Blood pressure</strong><span>Two numbers</span></a></li>
-    <li><a class="quick-tile" href="{% url 'records:quick_dose' %}"><strong>Dose</strong><span>Today's rows</span></a></li>
-    <li><a class="quick-tile" href="{% url 'records:quick_symptom' %}"><strong>Symptom</strong><span>Name and severity</span></a></li>
-    <li><a class="quick-tile" href="{% url 'records:quick_checkin' %}"><strong>Check-in</strong><span>Six ratings</span></a></li>
-    <li><a class="quick-tile" href="{% url 'records:quick_note' %}"><strong>Note</strong><span>Free text</span></a></li>
-    <li><a class="quick-tile" href="{% url 'records:quick_period' %}"><strong>Period</strong><span>Travel, illness</span></a></li>
+    <li>
+      <a class="quick-tile" href="{% url 'records:quick_measurement' %}">
+        <span class="quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h3l2-5 3.5 10 2.5-5H21"/></svg></span>
+        <span><strong>Blood pressure</strong><span>Two numbers and a pulse</span></span>
+      </a>
+    </li>
+    <li>
+      <a class="quick-tile" href="{% url 'records:quick_dose' %}">
+        <span class="quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="9" width="18" height="6" rx="3"/><path d="M12 9v6"/></svg></span>
+        <span><strong>Dose</strong><span>Today's scheduled rows</span></span>
+      </a>
+    </li>
+    <li>
+      <a class="quick-tile" href="{% url 'records:quick_symptom' %}">
+        <span class="quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3M12 18v3M4.2 7.5l2.6 1.5M17.2 15l2.6 1.5M4.2 16.5l2.6-1.5M17.2 9l2.6-1.5"/><circle cx="12" cy="12" r="3"/></svg></span>
+        <span><strong>Symptom</strong><span>Name, severity, body area</span></span>
+      </a>
+    </li>
+    <li>
+      <a class="quick-tile" href="{% url 'records:quick_checkin' %}">
+        <span class="quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg></span>
+        <span><strong>Check-in</strong><span>Six quick ratings</span></span>
+      </a>
+    </li>
+    <li>
+      <a class="quick-tile" href="{% url 'records:quick_note' %}">
+        <span class="quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h9l5 5v11H5z"/><path d="M14 4v5h5M8 13h8M8 17h5"/></svg></span>
+        <span><strong>Note</strong><span>Free text for later</span></span>
+      </a>
+    </li>
+    <li>
+      <a class="quick-tile" href="{% url 'records:quick_period' %}">
+        <span class="quick-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span>
+        <span><strong>Period</strong><span>Travel, illness, or another span</span></span>
+      </a>
+    </li>
   </ul>
 {% endblock %}

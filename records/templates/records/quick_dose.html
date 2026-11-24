@@ -1,53 +1,61 @@
 {% extends "records/base.html" %}
 {% block content %}
-  <h1>{{ title }}</h1>
-  {% if slots %}
-    <ul class="dose-list">
-      {% for slot in slots %}
-        <li>
-          <div class="dose-line">
-            <strong>{{ slot.substance }}</strong>
-            {% if slot.strength %}<span>{{ slot.strength }} {{ slot.unit }}</span>{% endif %}
-            <span class="muted">{{ slot.scheduled_for|time:"H:i" }}</span>
-          </div>
-          {% if slot.status %}
-            <span class="badge badge-ok">{{ slot.status|capfirst }}</span>
-          {% else %}
-            <form method="post" class="inline">
-              {% csrf_token %}
-              <input type="hidden" name="medication_id" value="{{ slot.medication_id }}">
-              <input type="hidden" name="scheduled_for" value="{{ slot.scheduled_for|date:'c' }}">
-              <button class="tap" name="status" value="taken">Taken</button>
-              <button class="tap" name="status" value="skipped">Skipped</button>
-            </form>
-          {% endif %}
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="empty">No course expects a dose today.</p>
-  {% endif %}
-  {% if prn_courses %}
-    <section aria-labelledby="prn-heading">
-      <h2 id="prn-heading">As needed</h2>
-      <ul class="dose-list">
-        {% for course in prn_courses %}
-          <li>
-            <div class="dose-line">
-              <strong>{{ course.substance }}</strong>
-              {% if course.strength %}<span>{{ course.strength }} {{ course.unit }}</span>{% endif %}
-              <span class="muted">max {{ course.schedule.max_per_day }}/day</span>
-            </div>
-            <form method="post" class="inline">
-              {% csrf_token %}
-              <input type="hidden" name="medication_id" value="{{ course.pk }}">
-              <button class="tap" name="status" value="taken">Taken</button>
-              <button class="tap" name="status" value="skipped">Skipped</button>
-            </form>
-          </li>
-        {% endfor %}
-      </ul>
+  <div class="page-head">
+    <div>
+      <span class="card-eyebrow">{{ today|date:"l j F" }}</span>
+      <h1>{{ title }}</h1>
+    </div>
+    <div class="page-actions">
+      <a class="button quiet" href="{% url 'records:regimen' %}">Regimen</a>
+    </div>
+  </div>
+
+  <div class="stack">
+    <section class="card" aria-labelledby="scheduled-heading">
+      <div class="card-head">
+        <div>
+          <span class="card-eyebrow">Scheduled</span>
+          <h2 id="scheduled-heading">Expected today</h2>
+        </div>
+      </div>
+      {% if slots %}
+        <ul class="dose-list">
+          {% for slot in slots %}{% include "records/_dose_row.html" %}{% endfor %}
+        </ul>
+      {% else %}
+        <p class="empty">No course expects a dose today.</p>
+      {% endif %}
     </section>
-  {% endif %}
-  <p><a class="button quiet" href="{% url 'records:regimen' %}">Regimen</a></p>
+
+    {% if prn_courses %}
+      <section class="card" aria-labelledby="prn-heading">
+        <div class="card-head">
+          <div>
+            <span class="card-eyebrow">As needed</span>
+            <h2 id="prn-heading">Take when you need it</h2>
+          </div>
+        </div>
+        <ul class="dose-list">
+          {% for course in prn_courses %}
+            <li class="dose-row">
+              <div class="dose-main">
+                <span class="dose-name">{{ course.substance }}</span>
+                <span class="dose-meta">
+                  {% if course.strength %}{{ course.strength }} {{ course.unit }} · {% endif %}up to {{ course.schedule.max_per_day }}/day
+                </span>
+              </div>
+              <form method="post" action="{% url 'records:quick_dose' %}" class="dose-actions" data-once>
+                {% csrf_token %}
+                <input type="hidden" name="medication_id" value="{{ course.pk }}">
+                <button type="submit" class="take-btn" name="status" value="taken" title="Mark as taken" aria-label="Mark {{ course.substance }} as taken">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg>
+                </button>
+                <button type="submit" class="skip-btn" name="status" value="skipped" aria-label="Mark {{ course.substance }} as skipped">Skip</button>
+              </form>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+  </div>
 {% endblock %}
