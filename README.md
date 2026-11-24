@@ -6,7 +6,7 @@ Wearables; this service joins by date. The full plan is [planning/PLAN.md](plann
 
 ## What exists in this build
 
-Slice 1–4 of the plan's §11 build order:
+Slices 1–5 of the plan's §11 build order:
 
 - Accounts and context: person, environment, goals, programme, dashboard, domain state,
   audit events, per-account timezone.
@@ -17,9 +17,15 @@ Slice 1–4 of the plan's §11 build order:
 - Memory: entries, corrections with the supersede chain, pin/lock, close follow-up,
   `/memory/review` for client-written rows, promoting a symptom into an injury or condition,
   API tokens, settings and audit.
+- JSON API at `/api/v1`: bearer tokens from `/tokens`, one success envelope, page blocks,
+  owner-scoped ids (`404`, never `403`), the write rules of §5, `/summary`,
+  `/expected-doses`, `/adherence`, `/health`, and `/docs` plus `/openapi.json` (session or
+  bearer). The contract is committed at `docs/api/openapi.json`; regenerate it with
+  `uv run python tools/dump_openapi.py`. The `Lab` and `Document` models exist and `/labs`
+  is readable, but no lab screen or PDF upload is built yet.
 
-The JSON API (§5), labs, import, backup/restore and export are not built yet. Where the plan
-says "API", the UI writes today's records only.
+The labs UI and PDFs (§6), the importer (§7), backup/restore (§9) and export, purge, search
+and `/llms.txt` (§6 slice 6) are not built yet.
 
 ## Run it locally
 
@@ -95,8 +101,9 @@ rules and the contributor agreement.
 
 ```
 health_info/   settings (base/development/production/test), server, urls, wsgi
-records/       models, forms, views, registries, schedule (derived values), summary
+records/       models, forms, views, api, registries, schedule (derived), summary
 records/db/    the WAL-enforcing SQLite backend
-tests/         schedule, isolation, registry, memory, UI, auth
-tools/         healthcheck, production check, image audit, release and hygiene scripts
+docs/api/      the committed OpenAPI contract
+tests/         schedule, isolation (UI and API), registry, memory, UI, auth
+tools/         healthcheck, openapi dump, production check, image audit, release scripts
 ```
