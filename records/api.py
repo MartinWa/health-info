@@ -311,7 +311,6 @@ class LabOut(RecordOut):
     fasting: bool | None = None
     collected_at: datetime
     lab_name: str
-    document_id: int | None = None
 
 
 class ComponentOut(Schema):

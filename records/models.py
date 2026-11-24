@@ -431,26 +431,6 @@ class Vaccination(OwnedRecord):
         return self.vaccine
 
 
-class Document(models.Model):
-    """A lab PDF, content-addressed by sha256; one row per file per account."""
-
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
-    file = models.FileField(upload_to="labs")
-    sha256 = models.CharField(max_length=64)
-    bytes = models.PositiveBigIntegerField()
-    media_type = models.CharField(max_length=100, default="application/pdf")
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-        constraints = [
-            models.UniqueConstraint(fields=["user", "sha256"], name="uniq_document_sha256")
-        ]
-
-    def __str__(self):
-        return self.file.name.rsplit("/", 1)[-1]
-
-
 class Lab(OwnedRecord):
     """One analyte in a panel; exactly one of value and value_text."""
 
@@ -464,9 +444,6 @@ class Lab(OwnedRecord):
     fasting = models.BooleanField(null=True, blank=True)
     collected_at = models.DateTimeField()
     lab_name = models.CharField(max_length=200, blank=True)
-    document = models.ForeignKey(
-        Document, null=True, blank=True, on_delete=models.PROTECT, related_name="+"
-    )
 
     class Meta(OwnedRecord.Meta):
         verbose_name_plural = "labs"
@@ -483,8 +460,6 @@ class Lab(OwnedRecord):
     def clean(self):
         if (self.value is None) == (self.value_text is None):
             raise ValidationError("A result needs a number or a text value, not both.")
-        if self.document_id and self.document.user_id != self.user_id:
-            raise ValidationError({"document": "Unknown document."})
 
     def __str__(self):
         return f"{self.panel} {self.analyte}"

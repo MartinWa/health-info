@@ -100,20 +100,8 @@ STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
-# PDFs are served only by owner-scoped views, never by static or media routing.
-MEDIA_ROOT = DATA_DIR / "media"
-MEDIA_URL = "/media/"
-FILE_UPLOAD_PERMISSIONS = 0o600
-FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
-try:
-    MAX_UPLOAD_BYTES = int(os.environ.get("HEALTH_INFO_MAX_UPLOAD_BYTES", 20 * 1024 * 1024))
-except ValueError as exc:
-    raise ImproperlyConfigured("HEALTH_INFO_MAX_UPLOAD_BYTES must be an integer.") from exc
-if not 1 <= MAX_UPLOAD_BYTES <= 100 * 1024 * 1024:
-    raise ImproperlyConfigured("HEALTH_INFO_MAX_UPLOAD_BYTES must be between 1 and 104857600.")
-DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_BYTES + 64 * 1024
-FILE_UPLOAD_MAX_MEMORY_SIZE = 256 * 1024
-DATA_UPLOAD_MAX_NUMBER_FILES = 1
+# Nothing uploads a file; every request body is a form or JSON, and /api/ has its own limit.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024
 SESSION_COOKIE_NAME = "__Host-health_info_session"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"

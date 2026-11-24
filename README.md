@@ -6,7 +6,7 @@ Wearables; this service joins by date. The full plan is [planning/PLAN.md](plann
 
 ## What exists in this build
 
-Slices 1–5 of the plan's §11 build order:
+Slices 1–5 of the plan's §10 build order:
 
 - Accounts and context: person, environment, goals, programme, dashboard, domain state,
   audit events, per-account timezone.
@@ -21,11 +21,11 @@ Slices 1–5 of the plan's §11 build order:
   owner-scoped ids (`404`, never `403`), the write rules of §5, `/summary`,
   `/expected-doses`, `/adherence`, `/health`, and `/docs` plus `/openapi.json` (session or
   bearer). The contract is committed at `docs/api/openapi.json`; regenerate it with
-  `uv run python tools/dump_openapi.py`. The `Lab` and `Document` models exist and `/labs`
-  is readable, but no lab screen or PDF upload is built yet.
+  `uv run python tools/dump_openapi.py`. The `Lab` model and `GET /labs` exist; no lab screen
+  is built yet.
 
-The labs UI and PDFs (§6), the importer (§7), backup/restore (§9) and export, purge, search
-and `/llms.txt` (§6 slice 6) are not built yet.
+The labs UI (§6), backup/restore (§8) and export, purge, search and `/llms.txt` (§6 slice 6)
+are not built yet.
 
 ## Run it locally
 
@@ -88,7 +88,7 @@ pwsh -File tools/tag_release.ps1 -Push
 The tag triggers the release workflow, which builds `linux/amd64` and `linux/arm64`, runs
 `tools/check_production.py` against each image, audits them, publishes the multi-platform
 image to `ghcr.io/martinwa/health-info`, and creates the GitHub Release. There are no
-down-migrations; the operations plan in [planning/PLAN.md](planning/PLAN.md) §9 says how to
+down-migrations; the operations plan in [planning/PLAN.md](planning/PLAN.md) §8 says how to
 back up and restore.
 
 ## License
