@@ -591,6 +591,14 @@ def test_a_blood_pressure_panel_can_be_annotated(api):
     assert updated.status_code == 200, updated.content
     assert updated.json()["note"] == "retaken"
     assert patch(api, f"/api/v1/measurements/{panel['id']}", {"value": 120}).status_code == 422
+    # The panel bypasses clean(), so the allowed fields are validated explicitly.
+    url = f"/api/v1/measurements/{panel['id']}"
+    assert patch(api, url, {"at": None}).status_code == 422
+    assert patch(api, url, {"note": None}).status_code == 422
+    too_long = patch(api, url, {"note": "x" * 201})
+    assert too_long.status_code == 422
+    assert body(too_long)["error"]["details"][0]["path"] == "note"
+    assert patch(api, url, {"note": "x" * 200}).status_code == 200
 
 
 def test_a_correction_can_be_pinned(api):

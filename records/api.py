@@ -928,12 +928,25 @@ def fetch(model, request, pk, *, queryset=None, path="id"):
     return obj
 
 
-def commit(obj):
+def reject_nulls(obj):
     for field in obj._meta.concrete_fields:
         if field.null or field.primary_key or not field.editable:
             continue
         if getattr(obj, field.attname) is None:
             raise invalid_field(field.name, "This field cannot be null.")
+
+
+def validate_fields(obj):
+    """Field-level checks only: a panel has no scalar metric for `clean()` to accept."""
+    reject_nulls(obj)
+    try:
+        obj.clean_fields()
+    except DjangoValidationError as exc:
+        raise invalid(exc) from exc
+
+
+def commit(obj):
+    reject_nulls(obj)
     try:
         obj.full_clean()
         obj.save()
@@ -1536,6 +1549,7 @@ def update_measurement(request, id: int, payload: MeasurementPatch):
                 raise invalid_field(field, "A blood pressure panel carries only its components.")
         for field, value in data.items():
             setattr(obj, field, value)
+        validate_fields(obj)
         with transaction.atomic():
             obj.save()
             if "at" in data:
