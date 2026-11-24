@@ -3,7 +3,7 @@
 import io
 import json
 import zipfile
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
@@ -281,18 +281,40 @@ def test_search_covers_notes_outcome_notes_and_the_programme(user, logged_in):
     )
     M.Appointment._default_manager.create(
         user=user,
-        at=timezone.now(),
+        at=timezone.make_aware(datetime(2026, 11, 2, 9, 0)),
         practitioner_name="Dr Example",
         outcome_note="sentinel-outcome",
     )
     M.Program._default_manager.create(user=user, name="sentinel-programme 5x5")
     for query, expected in (
         ("birch", "Pollen"),
-        ("sentinel-outcome", "Dr Example 2026-11-24"),
+        ("sentinel-outcome", "Dr Example 2026-11-02"),
         ("sentinel-programme", "sentinel-programme 5x5"),
     ):
         response = logged_in.get(reverse("records:search"), {"q": query})
         assert [row["text"] for row in response.context["results"]] == [expected], query
+
+
+def test_a_historical_programme_match_opens_that_programme(user, logged_in):
+    M.Program._default_manager.create(
+        user=user, name="sentinel-old-block", phase="base", started=date(2025, 1, 6)
+    )
+    M.Program._default_manager.create(
+        user=user, name="Current block", phase="cut", started=date(2026, 11, 2)
+    )
+    response = logged_in.get(reverse("records:search"), {"q": "sentinel-old-block"})
+    hit = response.context["results"][0]
+    page = logged_in.get(hit["url"])
+    assert page.status_code == 200
+    assert page.context["form"].instance.name == "sentinel-old-block"
+
+
+def test_another_accounts_programme_id_is_404(user, other_client):
+    programme = M.Program._default_manager.create(
+        user=user, name="sentinel programme", phase="base", started=date(2025, 1, 6)
+    )
+    response = other_client.get(reverse("records:program") + f"?id={programme.pk}")
+    assert response.status_code == 404
 
 
 def test_search_offers_a_continuation_past_ten_matches(user, logged_in):

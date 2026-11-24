@@ -815,16 +815,19 @@ class LabUpdate(RecordUpdate):
     success_url_name = "records:labs_detail"
 
     def form_valid(self, form):
-        response = super().form_valid(form)
-        M.Lab._default_manager.filter(
-            user=self.request.user,
-            panel=self.object.panel,
-            collected_at=self.object.collected_at,
-        ).exclude(pk=self.object.pk).update(
-            lab_name=self.object.lab_name,
-            fasting=self.object.fasting,
-            updated_at=timezone.now(),
-        )
+        # The row and its siblings are one write: two overlapping edits of the same panel
+        # must not leave rows with different lab names.
+        with transaction.atomic():
+            response = super().form_valid(form)
+            M.Lab._default_manager.filter(
+                user=self.request.user,
+                panel=self.object.panel,
+                collected_at=self.object.collected_at,
+            ).exclude(pk=self.object.pk).update(
+                lab_name=self.object.lab_name,
+                fasting=self.object.fasting,
+                updated_at=timezone.now(),
+            )
         return response
 
 
@@ -925,9 +928,15 @@ def environment(request):
 
 @login_required
 def program(request):
-    instance = M.Program._default_manager.filter(user=request.user).order_by(
-        "-started", "-created_at"
-    ).first() or M.Program(user=request.user)
+    wanted = request.GET.get("id", "")
+    if wanted.isdigit():
+        instance = get_object_or_404(
+            M.Program._default_manager.filter(user=request.user), pk=int(wanted)
+        )
+    else:
+        instance = M.Program._default_manager.filter(user=request.user).order_by(
+            "-started", "-created_at"
+        ).first() or M.Program(user=request.user)
     return _singleton_form(
         request, F.ProgramForm, instance, "Programme", "records:program", "records.Program"
     )
@@ -1596,41 +1605,42 @@ def purge(request):
 
 SEARCH_LIMIT = 10
 
-# (model, searched fields, page, does that page take the row's pk). Free text only: no
-# codes, no JSON fields, and no singleton without a page of its own.
+# (model, searched fields, page, how the page addresses this row): None takes the row's pk,
+# "" is a page with no identity of its own, "?id={pk}" is a page that shows the named row.
+# Free text only: no codes and no JSON fields.
 SEARCH_TARGETS = (
-    (M.MemoryEntry, ("statement", "subject"), "records:memory_detail", True),
-    (M.Note, ("body",), "records:notes_detail", True),
-    (M.Symptom, ("name", "trigger", "note"), "records:symptoms_detail", True),
-    (M.Condition, ("name", "code", "note", "abatement"), "records:conditions_detail", True),
-    (M.Injury, ("mechanism", "rehab"), "records:injuries_detail", True),
-    (M.Allergy, ("substance", "reaction", "note"), "records:allergies_detail", True),
+    (M.MemoryEntry, ("statement", "subject"), "records:memory_detail", None),
+    (M.Note, ("body",), "records:notes_detail", None),
+    (M.Symptom, ("name", "trigger", "note"), "records:symptoms_detail", None),
+    (M.Condition, ("name", "code", "note", "abatement"), "records:conditions_detail", None),
+    (M.Injury, ("mechanism", "rehab"), "records:injuries_detail", None),
+    (M.Allergy, ("substance", "reaction", "note"), "records:allergies_detail", None),
     (
         M.Medication,
         ("substance", "indication", "purpose_note"),
         "records:medications_detail",
-        True,
+        None,
     ),
-    (M.Vaccination, ("vaccine", "lot", "site"), "records:vaccinations_detail", True),
-    (M.Lab, ("panel", "analyte", "lab_name"), "records:labs_detail", True),
-    (M.Measurement, ("note", "device"), "records:measurements_detail", True),
+    (M.Vaccination, ("vaccine", "lot", "site"), "records:vaccinations_detail", None),
+    (M.Lab, ("panel", "analyte", "lab_name"), "records:labs_detail", None),
+    (M.Measurement, ("note", "device"), "records:measurements_detail", None),
     (
         M.Appointment,
         ("practitioner_name", "place", "reason", "outcome_note"),
         "records:appointments_detail",
-        True,
+        None,
     ),
-    (M.Period, ("note",), "records:periods_detail", True),
-    (M.Checkin, ("note",), "records:checkins_detail", True),
+    (M.Period, ("note",), "records:periods_detail", None),
+    (M.Checkin, ("note",), "records:checkins_detail", None),
     (
         M.Practitioner,
         ("name", "specialty", "organisation", "contact"),
         "records:practitioners_detail",
-        True,
+        None,
     ),
-    (M.Goal, ("note",), "records:goals_detail", True),
-    (M.Program, ("name", "phase", "progression"), "records:program", False),
-    (M.Environment, ("notes",), "records:environment", False),
+    (M.Goal, ("note",), "records:goals_detail", None),
+    (M.Program, ("name", "phase", "progression"), "records:program", "?id={pk}"),
+    (M.Environment, ("notes",), "records:environment", ""),
 )
 
 
@@ -1653,7 +1663,7 @@ def search(request):
     more = []
     search_url = reverse("records:search")
     if query:
-        for model, fields, url_name, by_pk in SEARCH_TARGETS:
+        for model, fields, url_name, address in SEARCH_TARGETS:
             if kind and kind != url_name:
                 continue
             hits = list(_search_hits(request.user, model, fields, query, offset))
@@ -1662,7 +1672,9 @@ def search(request):
                     {
                         "text": str(obj),
                         "kind": model._meta.verbose_name,
-                        "url": reverse(url_name, args=[obj.pk]) if by_pk else reverse(url_name),
+                        "url": reverse(url_name, args=[obj.pk])
+                        if address is None
+                        else reverse(url_name) + address.format(pk=obj.pk),
                     }
                 )
             if len(hits) > SEARCH_LIMIT:
