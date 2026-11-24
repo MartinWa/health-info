@@ -72,6 +72,69 @@ def test_a_back_dated_correction_is_a_field_error(user, logged_in):
     assert original.status == "active"
 
 
+def test_a_second_correction_of_the_same_claim_goes_to_its_replacement(user, logged_in):
+    original = entry(user)
+    first = M.supersede(
+        original,
+        M.MemoryEntry(
+            user=user,
+            subject="training",
+            statement="Trains three mornings a week.",
+            observed_at=timezone.make_aware(datetime(2026, 11, 21, 9, 0)),
+        ),
+    )
+    response = logged_in.post(
+        reverse("records:memory_correct", args=[original.pk]),
+        {
+            "subject": "training",
+            "statement": "Competing replacement.",
+            "observed_at": OBSERVED,
+            "importance": "3",
+        },
+    )
+    assert response.status_code == 303
+    assert response.headers["Location"] == reverse("records:memory_detail", args=[first.pk])
+    assert M.MemoryEntry._default_manager.filter(corrects=original).count() == 1
+    assert M.MemoryEntry._default_manager.filter(status="active").count() == 1
+
+    later = logged_in.post(
+        reverse("records:memory_correct", args=[first.pk]),
+        {
+            "subject": "training",
+            "statement": "Trains two mornings a week.",
+            "observed_at": "2026-11-22T09:00",
+            "importance": "3",
+        },
+    )
+    assert later.status_code == 303
+    assert M.MemoryEntry._default_manager.filter(status="active").count() == 1
+
+
+def test_a_correction_without_a_timestamp_is_a_field_error(user, logged_in):
+    original = entry(user)
+    response = logged_in.post(
+        reverse("records:memory_correct", args=[original.pk]),
+        {"subject": "training", "statement": "Changed.", "importance": "3"},
+    )
+    assert response.status_code == 200
+    assert response.context["form"].errors["observed_at"]
+    assert M.MemoryEntry._default_manager.filter(corrects__isnull=False).count() == 0
+
+
+def test_the_edit_form_does_not_ask_for_the_observation_time(user, logged_in):
+    original = entry(user)
+    page = logged_in.get(reverse("records:memory_edit", args=[original.pk]))
+    assert page.status_code == 200
+    assert "observed_at" not in page.context["form"].fields
+    response = logged_in.post(
+        reverse("records:memory_edit", args=[original.pk]),
+        {"subject": "training", "statement": "Trains in the mornings.", "tags": ""},
+    )
+    assert response.status_code == 303
+    original.refresh_from_db()
+    assert original.statement == "Trains in the mornings."
+
+
 def test_a_correction_kind_without_a_corrects_id_is_refused(user, logged_in):
     response = logged_in.post(
         reverse("records:memory_new"),
@@ -302,9 +365,10 @@ def test_promote_a_symptom_prefills_onset_and_area(user, logged_in):
 
 def test_a_token_is_shown_once_and_only_its_digest_is_stored(user, logged_in):
     response = logged_in.post(reverse("records:tokens"), {"name": "health-mcp"})
-    assert response.status_code == 303
-    assert "new_token" not in response.headers.get("Location", "")
-    raw = logged_in.get(reverse("records:tokens")).context["new_token"]
+    assert response.status_code == 200
+    raw = response.context["new_token"]
+    assert "new_token" not in logged_in.session
+    assert all(raw not in str(value) for value in logged_in.session.items())
     assert raw.startswith("hi_")
     token = M.ApiToken._default_manager.get(user=user, name="health-mcp")
     assert token.prefix == raw[:12]

@@ -1055,6 +1055,10 @@ def memory_correct(request, pk):
     if old.locked:
         messages.error(request, "This entry is locked; unlock it before correcting it.")
         return see_other(reverse("records:memory_detail", args=[old.pk]))
+    if old.status != "active":
+        messages.error(request, "This claim was already corrected; correct its replacement.")
+        latest = old.corrected_by.order_by("-observed_at").first()
+        return see_other(reverse("records:memory_detail", args=[(latest or old).pk]))
     instance = M.MemoryEntry(user=request.user, corrects=old, subject=old.subject)
     form = F.MemoryCorrectionForm(request.POST or None, user=request.user, instance=instance)
     if request.method == "GET":
@@ -1068,7 +1072,7 @@ def memory_correct(request, pk):
         try:
             entry = form.save()
         except ValidationError:
-            messages.error(request, "This entry is locked; unlock it before correcting it.")
+            messages.error(request, "This claim changed; open it again before correcting it.")
             return see_other(reverse("records:memory_detail", args=[old.pk]))
         audit(request.user, "correct", "records.MemoryEntry", entry.pk)
         messages.success(request, "Saved as a correction; the old claim is superseded.")
@@ -1240,16 +1244,17 @@ def promote_symptom(request, pk, target):
 @login_required
 def tokens(request):
     user = request.user
-    new_token = request.session.pop("new_token", None)
+    new_token = None
     form = F.TokenForm(request.POST or None, user=user)
     if request.method == "POST" and form.is_valid():
         token, new_token = M.ApiToken.issue(
             user, form.cleaned_data["name"], form.cleaned_data.get("expires_at")
         )
         audit(user, "token_issue", "records.ApiToken", token.pk)
-        request.session["new_token"] = new_token
-        messages.success(request, "Token issued.")
-        return see_other(reverse("records:tokens"))
+        # Rendered once in this response: never a redirect, a message or the session, so
+        # the secret is never stored anywhere.
+        form = F.TokenForm(user=user)
+        messages.success(request, "Token issued. Copy it now.")
     return render(
         request,
         "records/tokens.html",

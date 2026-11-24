@@ -617,6 +617,9 @@ class MemoryForm(OwnerForm):
 class MemoryEditForm(MemoryForm):
     """Typos, tags and pinning; a changed claim is a correction, not an edit."""
 
+    # Declared on MemoryForm; an in-place edit never moves the observation time.
+    observed_at = None
+
     class Meta(MemoryForm.Meta):
         fields = ["subject", "statement", "tags", "pinned", "due_at"]
 

@@ -593,8 +593,11 @@ class MemoryEntry(OwnedRecord):
             raise ValidationError({"kind": "A correction must correct an existing entry."})
         if self.corrects_id:
             if self.corrects.user_id != self.user_id:
-                raise ValidationError({"corrects": "Unknown entry."})
-            if self.observed_at < self.corrects.observed_at:
+                raise ValidationError("Unknown entry.")
+            if self.corrects.status != "active":
+                raise ValidationError("This claim is no longer active; correct its replacement.")
+            # A missing or unparseable timestamp is a field error, not a crash.
+            if self.observed_at and self.observed_at < self.corrects.observed_at:
                 raise ValidationError(
                     {"observed_at": "A correction cannot be observed before the claim it corrects."}
                 )
@@ -613,6 +616,8 @@ def supersede(old, correction):
         )
         if old.locked:
             raise ValidationError("This entry is locked; unlock it before correcting it.")
+        if old.status != "active":
+            raise ValidationError("This claim is no longer active; correct its replacement.")
         correction.corrects = old
         correction.kind = "correction"
         correction.status = "active"
