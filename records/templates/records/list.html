@@ -1,0 +1,50 @@
+{% extends "records/base.html" %}
+{% block content %}
+  <div class="page-head">
+    <h1>{{ title }}</h1>
+    {% if new_url %}<a class="button" href="{{ new_url }}">Add</a>{% endif %}
+  </div>
+
+  {% if domain and not rows %}
+    <form method="post" action="{% url 'records:state' domain %}" class="segmented" aria-label="Is this recorded?">
+      {% csrf_token %}
+      <button class="tap" name="state" value="unknown"{% if state == "unknown" %} aria-pressed="true"{% endif %}>Not asked yet</button>
+      <button class="tap" name="state" value="none"{% if state == "none" %} aria-pressed="true"{% endif %}>None</button>
+    </form>
+  {% endif %}
+
+  <nav class="filters" aria-label="Filter by source">
+    <a href="?"{% if not source_filter %} aria-current="page"{% endif %}>All</a>
+    <a href="?source=owner"{% if source_filter == "owner" %} aria-current="page"{% endif %}>Owner</a>
+    <a href="?source=client"{% if source_filter == "client" %} aria-current="page"{% endif %}>Client</a>
+    <a href="?source=import"{% if source_filter == "import" %} aria-current="page"{% endif %}>Import</a>
+  </nav>
+
+  {% if rows %}
+    <table class="records">
+      <thead>
+        <tr>{% for label in column_labels %}<th scope="col">{{ label }}</th>{% endfor %}<th scope="col"><span class="visually-hidden">Record</span></th></tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            {% for cell in row.cells %}<td data-label="{{ column_labels|slice:forloop.counter|last }}">{{ cell }}</td>{% endfor %}
+            <td class="row-actions">
+              {% if row.source != "owner" %}<span class="badge">{% if row.reported_by %}{{ row.reported_by }}{% else %}{{ row.source }}{% endif %}</span>{% endif %}
+              {% if row.detail_url %}<a href="{{ row.detail_url }}">Open</a>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if is_paginated %}
+      <nav class="pager" aria-label="Pagination">
+        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}{% if source_filter %}&source={{ source_filter }}{% endif %}">Newer</a>{% endif %}
+        <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}{% if source_filter %}&source={{ source_filter }}{% endif %}">Older</a>{% endif %}
+      </nav>
+    {% endif %}
+  {% else %}
+    <p class="empty">{{ empty_text }}</p>
+  {% endif %}
+{% endblock %}

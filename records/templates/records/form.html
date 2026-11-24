@@ -1,0 +1,30 @@
+{% extends "records/base.html" %}
+{% block content %}
+  <h1>{{ title }}</h1>
+  <form method="post" class="record-form{% if compact %} compact{% endif %}" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="errors" role="alert">{{ form.non_field_errors }}</div>
+    {% endif %}
+    {% for field in form %}
+      {% if field.is_hidden %}
+        {{ field }}
+      {% else %}
+        <div class="field{% if field.errors %} invalid{% endif %}{% if field.field.widget.input_type == 'checkbox' %} check{% endif %}">
+          {% if field.field.widget.input_type == "checkbox" %}
+            <label class="check-label">{{ field }} {{ field.label }}</label>
+          {% else %}
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+          {% endif %}
+          {% if field.help_text %}<p class="hint">{{ field.help_text }}</p>{% endif %}
+          {% if field.errors %}<div class="errors" role="alert">{{ field.errors }}</div>{% endif %}
+        </div>
+      {% endif %}
+    {% endfor %}
+    <div class="actions">
+      <button class="button" type="submit">{{ submit_label|default:"Save" }}</button>
+      {% if cancel_url %}<a class="button quiet" href="{{ cancel_url }}">Cancel</a>{% endif %}
+    </div>
+  </form>
+{% endblock %}

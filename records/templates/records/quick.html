@@ -1,0 +1,12 @@
+{% extends "records/base.html" %}
+{% block content %}
+  <h1>Quick add</h1>
+  <ul class="quick-grid">
+    <li><a class="quick-tile" href="{% url 'records:quick_measurement' %}"><strong>Blood pressure</strong><span>Two numbers</span></a></li>
+    <li><a class="quick-tile" href="{% url 'records:quick_dose' %}"><strong>Dose</strong><span>Today's rows</span></a></li>
+    <li><a class="quick-tile" href="{% url 'records:quick_symptom' %}"><strong>Symptom</strong><span>Name and severity</span></a></li>
+    <li><a class="quick-tile" href="{% url 'records:quick_checkin' %}"><strong>Check-in</strong><span>Six ratings</span></a></li>
+    <li><a class="quick-tile" href="{% url 'records:quick_note' %}"><strong>Note</strong><span>Free text</span></a></li>
+    <li><a class="quick-tile" href="{% url 'records:quick_period' %}"><strong>Period</strong><span>Travel, illness</span></a></li>
+  </ul>
+{% endblock %}

@@ -1,0 +1,5 @@
+# Publish on loopback only, for a proxy running on the host instead of a network.
+services:
+  app:
+    ports:
+      - "127.0.0.1:8000:8000"

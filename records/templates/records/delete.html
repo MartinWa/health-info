@@ -1,0 +1,10 @@
+{% extends "records/base.html" %}
+{% block content %}
+  <h1>{{ title }}</h1>
+  <p>This removes the record permanently. There is no undo and no revision history.</p>
+  <form method="post" class="actions">
+    {% csrf_token %}
+    <button class="button danger" type="submit">Delete</button>
+    <a class="button quiet" href="javascript:history.back()">Cancel</a>
+  </form>
+{% endblock %}

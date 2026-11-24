@@ -1,0 +1,12 @@
+# Join the existing reverse proxy network under a stable alias.
+services:
+  app:
+    networks:
+      proxy:
+        aliases:
+          - health-info
+
+networks:
+  proxy:
+    external: true
+    name: "${PROXY_NETWORK:?Set the existing proxy network name}"

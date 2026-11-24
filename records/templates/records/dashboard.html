@@ -1,0 +1,77 @@
+{% extends "records/base.html" %}
+{% block content %}
+  <h1>Today</h1>
+  <p class="subtitle">{{ today|date:"l j F Y" }}</p>
+
+  {% if review_rows %}
+    <section class="strip" aria-labelledby="review-heading">
+      <h2 id="review-heading">Needs review</h2>
+      <p class="hint">Written by a client and not confirmed by you yet.</p>
+      <ul class="plain">
+        {% for row in review_rows %}<li><a href="{{ row.url }}">{{ row.text }}</a></li>{% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  <section class="strip" aria-labelledby="doses-heading">
+    <h2 id="doses-heading">Today's doses</h2>
+    {% if slots %}
+      <ul class="dose-list">
+        {% for slot in slots %}
+          <li>
+            <div class="dose-line">
+              <strong>{{ slot.substance }}</strong>
+              {% if slot.strength %}<span>{{ slot.strength }} {{ slot.unit }}</span>{% endif %}
+              <span class="muted">{{ slot.scheduled_for|time:"H:i" }}</span>
+            </div>
+            {% if slot.status %}
+              <span class="badge badge-ok">{{ slot.status|capfirst }}</span>
+            {% else %}
+              <form method="post" action="{% url 'records:quick_dose' %}" class="inline">
+                {% csrf_token %}
+                <input type="hidden" name="medication_id" value="{{ slot.medication_id }}">
+                <input type="hidden" name="scheduled_for" value="{{ slot.scheduled_for|date:'c' }}">
+                <button class="tap" name="status" value="taken">Taken</button>
+                <button class="tap" name="status" value="skipped">Skipped</button>
+              </form>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint">Nothing expected today.</p>
+    {% endif %}
+    <p><a class="button" href="{% url 'records:quick_dose' %}">Log another dose</a></p>
+  </section>
+
+  {% if appointments %}
+    <section class="strip" aria-labelledby="appointments-heading">
+      <h2 id="appointments-heading">Upcoming appointments</h2>
+      <ul class="plain">
+        {% for appointment in appointments %}
+          <li>
+            <a href="{% url 'records:appointments_detail' appointment.pk %}">
+              {{ appointment.at|date:"j M H:i" }} · {{ appointment.practitioner_name|default:appointment.place|default:"Appointment" }}
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  <section aria-labelledby="domains-heading">
+    <h2 id="domains-heading">Domains</h2>
+    <ul class="domain-lines">
+      {% for line in lines %}
+        <li>
+          <a class="domain-link" href="{{ line.url }}">
+            <span class="domain-name">{{ line.label }}</span>
+            <span class="state state-{{ line.state }}">{{ line.state }}</span>
+            <span class="domain-summary">{{ line.summary }}</span>
+            <span class="domain-action">{{ line.action }}</span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endblock %}

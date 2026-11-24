@@ -1,0 +1,53 @@
+{% extends "records/base.html" %}
+{% block content %}
+  <h1>{{ title }}</h1>
+  {% if slots %}
+    <ul class="dose-list">
+      {% for slot in slots %}
+        <li>
+          <div class="dose-line">
+            <strong>{{ slot.substance }}</strong>
+            {% if slot.strength %}<span>{{ slot.strength }} {{ slot.unit }}</span>{% endif %}
+            <span class="muted">{{ slot.scheduled_for|time:"H:i" }}</span>
+          </div>
+          {% if slot.status %}
+            <span class="badge badge-ok">{{ slot.status|capfirst }}</span>
+          {% else %}
+            <form method="post" class="inline">
+              {% csrf_token %}
+              <input type="hidden" name="medication_id" value="{{ slot.medication_id }}">
+              <input type="hidden" name="scheduled_for" value="{{ slot.scheduled_for|date:'c' }}">
+              <button class="tap" name="status" value="taken">Taken</button>
+              <button class="tap" name="status" value="skipped">Skipped</button>
+            </form>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty">No course expects a dose today.</p>
+  {% endif %}
+  {% if prn_courses %}
+    <section aria-labelledby="prn-heading">
+      <h2 id="prn-heading">As needed</h2>
+      <ul class="dose-list">
+        {% for course in prn_courses %}
+          <li>
+            <div class="dose-line">
+              <strong>{{ course.substance }}</strong>
+              {% if course.strength %}<span>{{ course.strength }} {{ course.unit }}</span>{% endif %}
+              <span class="muted">max {{ course.schedule.max_per_day }}/day</span>
+            </div>
+            <form method="post" class="inline">
+              {% csrf_token %}
+              <input type="hidden" name="medication_id" value="{{ course.pk }}">
+              <button class="tap" name="status" value="taken">Taken</button>
+              <button class="tap" name="status" value="skipped">Skipped</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+  <p><a class="button quiet" href="{% url 'records:regimen' %}">Regimen</a></p>
+{% endblock %}

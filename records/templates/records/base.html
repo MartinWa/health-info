@@ -1,0 +1,57 @@
+{% load static %}<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>{% block title %}{{ title|default:"Health info" }} · health-info{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'records/app.css' %}">
+    <script src="{% static 'records/app.js' %}" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="{% url 'records:dashboard' %}">health-info</a>
+      {% if user.is_authenticated %}
+        <nav class="main-nav" aria-label="Main">
+          <a href="{% url 'records:dashboard' %}">Today</a>
+          <a href="{% url 'records:quick' %}">Quick add</a>
+          <a href="{% url 'records:timeline' %}">Timeline</a>
+          <a href="{% url 'records:regimen' %}">Regimen</a>
+        </nav>
+        <details class="user-menu">
+          <summary>{{ user.get_username }}</summary>
+          <div class="user-menu-panel">
+            <a href="{% url 'records:person' %}">Person</a>
+            <a href="{% url 'records:environment' %}">Environment</a>
+            <a href="{% url 'records:goals_list' %}">Goals</a>
+            <a href="{% url 'records:program' %}">Programme</a>
+            <a href="{% url 'records:conditions_list' %}">Conditions</a>
+            <a href="{% url 'records:injuries_list' %}">Injuries</a>
+            <a href="{% url 'records:allergies_list' %}">Allergies</a>
+            <a href="{% url 'records:medications_list' %}">Medications</a>
+            <a href="{% url 'records:vaccinations_list' %}">Vaccinations</a>
+            <a href="{% url 'records:practitioners_list' %}">Practitioners</a>
+            <a href="{% url 'records:appointments_list' %}">Appointments</a>
+            <a href="{% url 'records:measurements_list' %}">Measurements</a>
+            <a href="{% url 'records:symptoms_list' %}">Symptoms</a>
+            <a href="{% url 'records:checkins_list' %}">Check-ins</a>
+            <a href="{% url 'records:periods_list' %}">Periods</a>
+            <a href="{% url 'records:notes_list' %}">Notes</a>
+            <a href="{% url 'password' %}">Change password</a>
+            {% if user.is_staff %}<a href="{% url 'admin:index' %}">Administration</a>{% endif %}
+            <form method="post" action="{% url 'logout' %}">
+              {% csrf_token %}<button type="submit">Sign out</button>
+            </form>
+          </div>
+        </details>
+      {% endif %}
+    </header>
+    <main id="main" tabindex="-1">
+      {% for message in messages %}
+        <p class="notice {{ message.tags }}" role="status">{{ message }}</p>
+      {% endfor %}
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

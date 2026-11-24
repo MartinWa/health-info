@@ -1,0 +1,17 @@
+{% extends "records/base.html" %}
+{% block content %}
+  <div class="page-head">
+    <h1>{{ title }}</h1>
+    {% if source != "owner" %}<span class="badge">{% if reported_by %}{{ reported_by }}{% else %}{{ source }}{% endif %}</span>{% endif %}
+  </div>
+  <dl class="detail">
+    {% for label, value in rows %}
+      <div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>
+    {% endfor %}
+  </dl>
+  <div class="actions">
+    {% if edit_url %}<a class="button" href="{{ edit_url }}">Edit</a>{% endif %}
+    {% if delete_url %}<a class="button danger" href="{{ delete_url }}">Delete</a>{% endif %}
+    <a class="button quiet" href="javascript:history.back()">Back</a>
+  </div>
+{% endblock %}

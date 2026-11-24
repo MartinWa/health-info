@@ -1,0 +1,25 @@
+{% extends "records/base.html" %}
+{% block content %}
+  <div class="page-head">
+    <h1>Regimen</h1>
+    <a class="button" href="{% url 'records:medications_new' %}">Add course</a>
+  </div>
+  {% if rows %}
+    <table class="records">
+      <thead><tr><th scope="col">Substance</th><th scope="col">Schedule</th><th scope="col">Started</th><th scope="col">Stopped</th><th scope="col">Doses</th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td data-label="Substance"><a href="{{ row.detail_url }}">{{ row.course.substance }}</a></td>
+            <td data-label="Schedule">{{ row.schedule }}</td>
+            <td data-label="Started">{{ row.course.started|date:"Y-m-d"|default:"—" }}</td>
+            <td data-label="Stopped">{{ row.course.stopped|date:"Y-m-d"|default:"ongoing" }}</td>
+            <td data-label="Doses">{{ row.doses }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">No courses recorded.</p>
+  {% endif %}
+{% endblock %}

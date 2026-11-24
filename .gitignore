@@ -1,0 +1,10 @@
+planning/
+.venv/
+.data/
+staticfiles/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.env
+*.sqlite3

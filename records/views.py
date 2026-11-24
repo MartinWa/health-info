@@ -1,0 +1,923 @@
+"""Server-rendered UI: GET renders, POST validates and redirects (303)."""
+
+from datetime import date, datetime
+from decimal import Decimal
+
+from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth import views as auth_views
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
+from django.db.models import ProtectedError
+from django.http import (
+    Http404,
+    HttpResponse,
+    HttpResponseNotAllowed,
+    HttpResponseRedirect,
+    JsonResponse,
+)
+from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+
+from records import forms as F
+from records import lockout
+from records import models as M
+from records import registries as R
+from records import schedule as S
+from records.summary import domain_lines
+
+
+def see_other(url):
+    return HttpResponse(status=303, headers={"Location": url})
+
+
+def audit(user, action, kind, object_id="", detail=None):
+    M.AuditEvent._default_manager.create(
+        user=user, action=action, object_kind=kind, object_id=str(object_id), detail=detail or {}
+    )
+
+
+def display(obj, name):
+    """Human text for one field, without ever defaulting to a raw code."""
+    field = obj._meta.get_field(name)
+    value = getattr(obj, name)
+    if value is None or value == "":
+        return "—"
+    if name == "metric" and isinstance(value, str):
+        try:
+            return R.resolve_metric(value).display
+        except ValidationError:
+            return value
+    if name == "unit" and value in R.UNIT_DISPLAY:
+        return R.UNIT_DISPLAY[value]
+    if getattr(field, "choices", None) and isinstance(value, str):
+        return dict(field.choices).get(value, value)
+    if isinstance(value, datetime):
+        return timezone.localtime(value).strftime("%Y-%m-%d %H:%M")
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return format(value.normalize(), "f")
+    if isinstance(value, dict) and "type" in value:
+        return S.describe_schedule(value)
+    if isinstance(value, dict):
+        return ", ".join(f"{key}: {val}" for key, val in value.items()) or "—"
+    if isinstance(value, list) and value and isinstance(value[0], dict):
+        return "; ".join(_limit_text(item) for item in value)
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value) or "—"
+    return value
+
+
+def _limit_text(limit):
+    text = " ".join(part for part in (limit.get("kind"), limit.get("pattern")) if part)
+    if limit.get("exercise"):
+        text += f" ({limit['exercise']})"
+    return text
+
+
+def healthz(request):
+    return JsonResponse({"status": "ok", "version": settings.APP_VERSION})
+
+
+# --- Generic owner-scoped views --------------------------------------------------------
+
+
+class OwnedMixin:
+    model = None
+    queryset_filter = {}
+
+    def get_queryset(self):
+        return self.model._default_manager.filter(user=self.request.user, **self.queryset_filter)
+
+
+class RecordList(LoginRequiredMixin, OwnedMixin, ListView):
+    template_name = "records/list.html"
+    paginate_by = 50
+    title = ""
+    domain = None
+    columns = ()
+    detail_url_name = None
+    new_url_name = None
+    empty_text = "Nothing recorded yet."
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        source = self.request.GET.get("source")
+        if source in R.SOURCE:
+            queryset = queryset.filter(source=source)
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            title=self.title,
+            domain=self.domain,
+            column_labels=[label for label, _ in self.columns],
+            rows=[
+                {
+                    "cells": [display(obj, name) for _, name in self.columns],
+                    "source": obj.source,
+                    "reported_by": obj.reported_by,
+                    "detail_url": reverse(self.detail_url_name, args=[obj.pk])
+                    if self.detail_url_name
+                    else None,
+                }
+                for obj in context["object_list"]
+            ],
+            new_url=reverse(self.new_url_name) if self.new_url_name else None,
+            empty_text=self.empty_text,
+            state=M.domain_state(self.request.user, self.domain) if self.domain else None,
+            source_filter=self.request.GET.get("source", ""),
+        )
+        return context
+
+
+class RecordDetail(LoginRequiredMixin, OwnedMixin, DetailView):
+    template_name = "records/detail.html"
+    title = ""
+    detail_fields = ()
+    edit_url_name = None
+    delete_url_name = None
+    exclude_metrics = frozenset()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            title=self.title,
+            rows=[
+                (name.replace("_", " ").capitalize(), display(self.object, name))
+                for name in self.detail_fields
+            ],
+            edit_url=self._edit_url(),
+            delete_url=reverse(self.delete_url_name, args=[self.object.pk])
+            if self.delete_url_name
+            else None,
+            source=self.object.source,
+            reported_by=self.object.reported_by,
+        )
+        components = getattr(self.object, "components", None)
+        if components is not None and components.exists():
+            context["rows"] += [
+                (display(component, "metric"), f"{display(component, 'value')} {component.unit}")
+                for component in components.all()
+            ]
+        return context
+
+    def _edit_url(self):
+        if not self.edit_url_name:
+            return None
+        if getattr(self.object, "metric", None) in self.exclude_metrics:
+            return None
+        return reverse(self.edit_url_name, args=[self.object.pk])
+
+
+class RecordCreate(LoginRequiredMixin, CreateView):
+    template_name = "records/form.html"
+    title = ""
+    success_url_name = ""
+    cancel_url_name = "records:dashboard"
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            title=self.title, submit_label="Save", cancel_url=reverse(self.cancel_url_name)
+        )
+        return context
+
+    def get_success_url(self):
+        return reverse(self.success_url_name, args=[self.object.pk])
+
+    def form_valid(self, form):
+        self.object = form.save()
+        audit(self.request.user, "create", self.object._meta.label, self.object.pk)
+        notify_warnings(self.request, form)
+        messages.success(self.request, "Saved.")
+        return HttpResponseRedirect(self.get_success_url(), status=303)
+
+
+class RecordUpdate(LoginRequiredMixin, OwnedMixin, UpdateView):
+    template_name = "records/form.html"
+    title = ""
+    success_url_name = ""
+    exclude_metrics = frozenset()
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.exclude_metrics:
+            queryset = queryset.exclude(metric__in=self.exclude_metrics)
+        return queryset
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            title=self.title,
+            submit_label="Save",
+            cancel_url=reverse(self.success_url_name, args=[self.object.pk]),
+        )
+        return context
+
+    def get_success_url(self):
+        return reverse(self.success_url_name, args=[self.object.pk])
+
+    def form_valid(self, form):
+        self.object = form.save()
+        audit(self.request.user, "update", self.object._meta.label, self.object.pk)
+        notify_warnings(self.request, form)
+        messages.success(self.request, "Saved.")
+        return HttpResponseRedirect(self.get_success_url(), status=303)
+
+
+class RecordDelete(LoginRequiredMixin, OwnedMixin, DeleteView):
+    template_name = "records/delete.html"
+    title = ""
+    success_url_name = ""
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(title=self.title)
+        return context
+
+    def get_success_url(self):
+        return reverse(self.success_url_name)
+
+    def form_valid(self, form):
+        try:
+            self.object.delete()
+        except ProtectedError:
+            messages.error(
+                self.request, "This record is referenced by other rows; remove those first."
+            )
+            return HttpResponseRedirect(self.get_success_url())
+        audit(self.request.user, "delete", self.object._meta.label, self.object.pk)
+        messages.success(self.request, "Deleted.")
+        return HttpResponseRedirect(self.get_success_url(), status=303)
+
+
+def notify_warnings(request, form):
+    for warning in getattr(form, "warnings", []) or []:
+        messages.warning(request, warning)
+
+
+# --- Resource table: one place ties model, form, columns and routes --------------------
+
+RESOURCES = {
+    "goals": {
+        "model": M.Goal,
+        "form": F.GoalForm,
+        "title": "Goals",
+        "domain": "goals",
+        "columns": [
+            ("Metric", "metric"),
+            ("Direction", "direction"),
+            ("Target", "target"),
+            ("Status", "status"),
+        ],
+        "detail_fields": [
+            "metric",
+            "direction",
+            "target",
+            "target_high",
+            "by",
+            "review_at",
+            "priority",
+            "status",
+            "baseline_value",
+            "baseline_on",
+            "note",
+            "source",
+            "reported_by",
+        ],
+    },
+    "conditions": {
+        "model": M.Condition,
+        "form": F.ConditionForm,
+        "title": "Conditions",
+        "domain": "conditions",
+        "columns": [
+            ("Name", "name"),
+            ("Since", "since"),
+            ("Status", "status"),
+            ("Verified", "verification_status"),
+        ],
+        "detail_fields": [
+            "name",
+            "code",
+            "since",
+            "since_precision",
+            "status",
+            "verification_status",
+            "severity",
+            "abatement",
+            "note",
+            "practitioner",
+            "source",
+            "reported_by",
+        ],
+    },
+    "injuries": {
+        "model": M.Injury,
+        "form": F.InjuryForm,
+        "title": "Injuries",
+        "domain": "injuries",
+        "columns": [
+            ("Area", "area"),
+            ("Side", "side"),
+            ("Status", "status"),
+            ("Verified", "verification_status"),
+        ],
+        "detail_fields": [
+            "area",
+            "side",
+            "since",
+            "since_precision",
+            "status",
+            "verification_status",
+            "mechanism",
+            "rehab",
+            "limits",
+            "source",
+            "reported_by",
+        ],
+    },
+    "allergies": {
+        "model": M.Allergy,
+        "form": F.AllergyForm,
+        "title": "Allergies",
+        "domain": "allergies",
+        "columns": [("Substance", "substance"), ("Type", "type"), ("Severity", "severity")],
+        "detail_fields": [
+            "substance",
+            "type",
+            "reaction",
+            "severity",
+            "criticality",
+            "note",
+            "source",
+            "reported_by",
+        ],
+    },
+    "medications": {
+        "model": M.Medication,
+        "form": F.MedicationForm,
+        "title": "Medications",
+        "domain": "medications",
+        "columns": [
+            ("Substance", "substance"),
+            ("Strength", "strength"),
+            ("Unit", "unit"),
+            ("Route", "route"),
+            ("Started", "started"),
+            ("Stopped", "stopped"),
+        ],
+        "detail_fields": [
+            "kind",
+            "substance",
+            "strength",
+            "unit",
+            "route",
+            "schedule",
+            "started",
+            "stopped",
+            "indication",
+            "practitioner",
+            "purpose_note",
+            "source",
+            "reported_by",
+        ],
+    },
+    "vaccinations": {
+        "model": M.Vaccination,
+        "form": F.VaccinationForm,
+        "title": "Vaccinations",
+        "domain": "vaccinations",
+        "columns": [("Vaccine", "vaccine"), ("Status", "status"), ("At", "at")],
+        "detail_fields": [
+            "vaccine",
+            "status",
+            "dose_number",
+            "lot",
+            "at",
+            "site",
+            "source",
+            "reported_by",
+        ],
+    },
+    "practitioners": {
+        "model": M.Practitioner,
+        "form": F.PractitionerForm,
+        "title": "Practitioners",
+        "domain": None,
+        "columns": [("Name", "name"), ("Specialty", "specialty"), ("Organisation", "organisation")],
+        "detail_fields": ["name", "specialty", "organisation", "contact"],
+    },
+    "appointments": {
+        "model": M.Appointment,
+        "form": F.AppointmentForm,
+        "title": "Appointments",
+        "domain": "appointments",
+        "columns": [("At", "at"), ("Practitioner", "practitioner_name"), ("Status", "status")],
+        "detail_fields": [
+            "at",
+            "practitioner",
+            "practitioner_name",
+            "specialty",
+            "place",
+            "reason",
+            "status",
+            "outcome_note",
+            "source",
+            "reported_by",
+        ],
+    },
+    "periods": {
+        "model": M.Period,
+        "form": F.PeriodForm,
+        "title": "Periods",
+        "domain": None,
+        "columns": [("Kind", "kind"), ("Start", "start"), ("End", "end")],
+        "detail_fields": ["kind", "start", "end", "note", "source", "reported_by"],
+    },
+    "measurements": {
+        "model": M.Measurement,
+        "form": F.MeasurementForm,
+        "user_filter": {"parent__isnull": True},
+        "exclude_metrics": {"blood_pressure"},
+        "title": "Measurements",
+        "domain": "measurements",
+        "columns": [("At", "at"), ("Metric", "metric"), ("Value", "value"), ("Unit", "unit")],
+        "detail_fields": [
+            "metric",
+            "value",
+            "unit",
+            "at",
+            "posture",
+            "side",
+            "fasted",
+            "device",
+            "note",
+        ],
+    },
+    "symptoms": {
+        "model": M.Symptom,
+        "form": F.SymptomForm,
+        "title": "Symptoms",
+        "domain": "symptoms",
+        "columns": [
+            ("Name", "name"),
+            ("Onset", "onset_at"),
+            ("Severity", "severity"),
+            ("Area", "body_area"),
+        ],
+        "detail_fields": [
+            "name",
+            "severity",
+            "interference",
+            "onset_at",
+            "resolved_at",
+            "body_area",
+            "side",
+            "trigger",
+            "note",
+            "source",
+            "reported_by",
+        ],
+    },
+    "checkins": {
+        "model": M.Checkin,
+        "form": F.CheckinForm,
+        "title": "Check-ins",
+        "domain": "checkins",
+        "columns": [
+            ("At", "at"),
+            ("Energy", "energy"),
+            ("Mood", "mood"),
+            ("Sleep", "sleep_quality"),
+        ],
+        "detail_fields": ["at", *R.CHECKIN_FIELDS, "note"],
+    },
+    "notes": {
+        "model": M.Note,
+        "form": F.NoteForm,
+        "title": "Notes",
+        "domain": "notes",
+        "columns": [("At", "at"), ("Note", "body")],
+        "detail_fields": ["at", "body", "tags", "source", "reported_by"],
+    },
+}
+
+
+SINGULAR = {
+    "goals": "goal",
+    "conditions": "condition",
+    "injuries": "injury",
+    "allergies": "allergy",
+    "medications": "medication course",
+    "vaccinations": "vaccination",
+    "practitioners": "practitioner",
+    "appointments": "appointment",
+    "periods": "period",
+    "measurements": "measurement",
+    "symptoms": "symptom",
+    "checkins": "check-in",
+    "notes": "note",
+}
+
+
+def resource_views(slug, config):
+    """Build the five owner-scoped views for one resource from its single config entry."""
+    names = f"records:{slug}"
+    singular = SINGULAR[slug]
+    list_view = type(
+        f"{slug}_list",
+        (RecordList,),
+        {
+            "model": config["model"],
+            "title": config["title"],
+            "domain": config["domain"],
+            "columns": config["columns"],
+            "queryset_filter": config.get("user_filter", {}),
+            "new_url_name": f"{names}_new",
+            "detail_url_name": f"{names}_detail",
+        },
+    ).as_view()
+    detail_view = type(
+        f"{slug}_detail",
+        (RecordDetail,),
+        {
+            "model": config["model"],
+            "title": SINGULAR[slug].capitalize(),
+            "detail_fields": config["detail_fields"],
+            "queryset_filter": config.get("user_filter", {}),
+            "exclude_metrics": config.get("exclude_metrics", frozenset()),
+            "edit_url_name": f"{names}_edit",
+            "delete_url_name": f"{names}_delete",
+        },
+    ).as_view()
+    create_view = type(
+        f"{slug}_new",
+        (RecordCreate,),
+        {
+            "model": config["model"],
+            "form_class": config["form"],
+            "title": f"Add {singular}",
+            "success_url_name": f"{names}_detail",
+            "cancel_url_name": f"{names}_list",
+        },
+    ).as_view()
+    update_view = type(
+        f"{slug}_edit",
+        (RecordUpdate,),
+        {
+            "model": config["model"],
+            "form_class": config["form"],
+            "title": f"Edit {singular}",
+            "success_url_name": f"{names}_detail",
+            "queryset_filter": config.get("user_filter", {}),
+            "exclude_metrics": config.get("exclude_metrics", frozenset()),
+        },
+    ).as_view()
+    delete_view = type(
+        f"{slug}_delete",
+        (RecordDelete,),
+        {
+            "model": config["model"],
+            "title": f"Delete {singular}",
+            "success_url_name": f"{names}_list",
+            "queryset_filter": config.get("user_filter", {}),
+        },
+    ).as_view()
+    return {
+        "list": list_view,
+        "detail": detail_view,
+        "new": create_view,
+        "edit": update_view,
+        "delete": delete_view,
+    }
+
+
+RESOURCE_VIEWS = {slug: resource_views(slug, config) for slug, config in RESOURCES.items()}
+
+
+# --- Dashboard and context singletons --------------------------------------------------
+
+
+@login_required
+def dashboard(request):
+    today = timezone.localdate()
+    user = request.user
+    review = [
+        (obj, "injuries")
+        for obj in M.Injury._default_manager.filter(
+            user=user, source="client", verification_status="unconfirmed"
+        )
+    ] + [
+        (obj, "conditions")
+        for obj in M.Condition._default_manager.filter(
+            user=user, source="client", verification_status="unconfirmed"
+        )
+    ]
+    context = {
+        "title": "Today",
+        "lines": domain_lines(user),
+        "review_rows": [
+            {"text": str(obj), "url": reverse(f"records:{kind}_detail", args=[obj.pk])}
+            for obj, kind in review
+        ],
+        "appointments": M.Appointment._default_manager.filter(
+            user=user, at__gte=timezone.now(), status="planned"
+        ).order_by("at")[:3],
+        "slots": S.planned_slots(user, today, today),
+        "today": today,
+    }
+    return render(request, "records/dashboard.html", context)
+
+
+def _singleton_form(request, form_class, instance, title, url_name, kind):
+    form = form_class(request.POST or None, user=request.user, instance=instance)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        audit(request.user, "update", kind, instance.pk or "")
+        messages.success(request, "Saved.")
+        return see_other(reverse(url_name))
+    return render(
+        request,
+        "records/form.html",
+        {
+            "form": form,
+            "title": title,
+            "submit_label": "Save",
+            "cancel_url": reverse("records:dashboard"),
+        },
+    )
+
+
+@login_required
+def person(request):
+    instance = M.Person._default_manager.filter(user=request.user).first() or M.Person(
+        user=request.user
+    )
+    return _singleton_form(
+        request, F.PersonForm, instance, "Person", "records:person", "records.Person"
+    )
+
+
+@login_required
+def environment(request):
+    instance = M.Environment._default_manager.filter(user=request.user).first() or M.Environment(
+        user=request.user
+    )
+    return _singleton_form(
+        request,
+        F.EnvironmentForm,
+        instance,
+        "Environment",
+        "records:environment",
+        "records.Environment",
+    )
+
+
+@login_required
+def program(request):
+    instance = M.Program._default_manager.filter(user=request.user).order_by(
+        "-started", "-created_at"
+    ).first() or M.Program(user=request.user)
+    return _singleton_form(
+        request, F.ProgramForm, instance, "Programme", "records:program", "records.Program"
+    )
+
+
+@login_required
+def set_domain_state(request, domain):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    url_name = DOMAIN_URLS.get(domain)
+    if url_name is None:
+        raise Http404
+    state = request.POST.get("state")
+    if state not in ("unknown", "none"):
+        raise Http404
+    M.DomainState._default_manager.update_or_create(
+        user=request.user, domain=domain, defaults={"state": state}
+    )
+    audit(request.user, "domain_state", "records.DomainState", detail={"state": state})
+    return see_other(reverse(url_name))
+
+
+DOMAIN_URLS = {
+    "goals": "records:goals_list",
+    "conditions": "records:conditions_list",
+    "injuries": "records:injuries_list",
+    "allergies": "records:allergies_list",
+    "medications": "records:medications_list",
+    "vaccinations": "records:vaccinations_list",
+    "appointments": "records:appointments_list",
+    "measurements": "records:measurements_list",
+    "symptoms": "records:symptoms_list",
+    "checkins": "records:checkins_list",
+    "notes": "records:notes_list",
+}
+
+
+# --- Quick add -------------------------------------------------------------------------
+
+
+def quick_form(request, form_class, title, kind):
+    form = form_class(request.POST or None, user=request.user)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        audit(request.user, "create", kind)
+        notify_warnings(request, form)
+        messages.success(request, "Saved.")
+        return see_other(reverse("records:dashboard"))
+    return render(
+        request,
+        "records/form.html",
+        {
+            "form": form,
+            "title": title,
+            "submit_label": "Save",
+            "cancel_url": reverse("records:quick"),
+            "compact": True,
+        },
+    )
+
+
+@login_required
+def quick(request):
+    return render(request, "records/quick.html", {"title": "Quick add"})
+
+
+@login_required
+def quick_measurement(request):
+    return quick_form(request, F.BloodPressureForm, "Blood pressure", "records.Measurement")
+
+
+@login_required
+def quick_symptom(request):
+    return quick_form(request, F.SymptomForm, "Symptom", "records.Symptom")
+
+
+@login_required
+def quick_note(request):
+    return quick_form(request, F.NoteForm, "Note", "records.Note")
+
+
+@login_required
+def quick_checkin(request):
+    return quick_form(request, F.CheckinForm, "Check-in", "records.Checkin")
+
+
+@login_required
+def quick_period(request):
+    return quick_form(request, F.PeriodForm, "Period", "records.Period")
+
+
+@login_required
+def quick_dose(request):
+    if request.method == "POST":
+        medication_id = request.POST.get("medication_id", "")
+        if not medication_id.isdigit():
+            raise Http404
+        medication = get_object_or_404(
+            M.Medication._default_manager.filter(user=request.user), pk=int(medication_id)
+        )
+        status = request.POST.get("status")
+        if status not in R.DOSE_STATUS:
+            raise Http404
+        raw_slot = request.POST.get("scheduled_for") or ""
+        scheduled_for = parse_datetime(raw_slot)
+        if raw_slot and scheduled_for is None:
+            return HttpResponse("Invalid scheduled_for.", status=400, content_type="text/plain")
+        if scheduled_for and timezone.is_naive(scheduled_for):
+            scheduled_for = timezone.make_aware(scheduled_for)
+        if scheduled_for is None:
+            M.DoseEvent._default_manager.create(
+                user=request.user, medication=medication, status=status, at=timezone.now()
+            )
+        else:
+            M.DoseEvent._default_manager.get_or_create(
+                user=request.user,
+                medication=medication,
+                scheduled_for=scheduled_for,
+                defaults={"status": status, "at": timezone.now()},
+            )
+        audit(request.user, "dose", "records.DoseEvent")
+        messages.success(request, "Dose logged.")
+        return see_other(reverse("records:dashboard"))
+    today = timezone.localdate()
+    return render(
+        request,
+        "records/quick_dose.html",
+        {
+            "title": "Log a dose",
+            "slots": S.planned_slots(request.user, today, today),
+            "today": today,
+            "prn_courses": M.Medication._default_manager.filter(
+                user=request.user, schedule__type="prn", stopped__isnull=True
+            ).order_by("substance"),
+        },
+    )
+
+
+@login_required
+def regimen(request):
+    courses = M.Medication._default_manager.filter(user=request.user).order_by(
+        "stopped", "-started"
+    )
+    rows = [
+        {
+            "course": course,
+            "schedule": S.describe_schedule(course.schedule),
+            "doses": course.dose_events.count(),
+            "detail_url": reverse("records:medications_detail", args=[course.pk]),
+        }
+        for course in courses
+    ]
+    return render(request, "records/regimen.html", {"title": "Regimen", "rows": rows})
+
+
+@login_required
+def timeline(request):
+    user = request.user
+    items = []
+
+    def add(queryset, kind, text, url_name, when_field="at"):
+        for obj in queryset:
+            items.append(
+                {
+                    "at": getattr(obj, when_field),
+                    "kind": kind,
+                    "text": text(obj),
+                    "url": reverse(url_name, args=[obj.pk]) if url_name else None,
+                }
+            )
+
+    add(
+        M.Measurement._default_manager.filter(user=user, parent__isnull=True),
+        "Measurement",
+        lambda obj: f"{display(obj, 'metric')} {display(obj, 'value')} {obj.unit}".strip(),
+        "records:measurements_detail",
+    )
+    add(
+        M.Symptom._default_manager.filter(user=user),
+        "Symptom",
+        lambda obj: obj.name,
+        "records:symptoms_detail",
+        "onset_at",
+    )
+    add(
+        M.Checkin._default_manager.filter(user=user),
+        "Check-in",
+        lambda obj: "Check-in",
+        "records:checkins_detail",
+    )
+    add(
+        M.Note._default_manager.filter(user=user),
+        "Note",
+        lambda obj: obj.body[:80],
+        "records:notes_detail",
+    )
+    add(
+        M.DoseEvent._default_manager.filter(user=user),
+        "Dose",
+        lambda obj: f"{obj.medication} {obj.status}",
+        None,
+    )
+    for period in M.Period._default_manager.filter(user=user):
+        items.append(
+            {
+                "at": timezone.make_aware(datetime.combine(period.start, datetime.min.time())),
+                "kind": "Period",
+                "text": f"{period.get_kind_display()} {period.start}",
+                "url": reverse("records:periods_detail", args=[period.pk]),
+            }
+        )
+    items.sort(key=lambda item: item["at"], reverse=True)
+    return render(request, "records/timeline.html", {"title": "Timeline", "items": items[:100]})
+
+
+# --- Session auth ---------------------------------------------------------------------
+
+
+class LoginView(auth_views.LoginView):
+    template_name = "records/login.html"
+
+    def post(self, request, *args, **kwargs):
+        return lockout.guard_login(
+            request, lambda: super(LoginView, self).post(request, *args, **kwargs)
+        )

@@ -1,0 +1,34 @@
+# Installation-specific values come from private .env configuration.
+services:
+  app:
+    image: "${HEALTH_INFO_IMAGE:?Set a tested local or released image tag or digest}"
+    env_file: "${HEALTH_INFO_ENV_FILE:-.env}"
+    environment:
+      DJANGO_SETTINGS_MODULE: health_info.settings.production
+      HEALTH_INFO_DATA_DIR: /data
+    user: "${APP_UID:?Set a non-root APP_UID}:${APP_GID:?Set APP_GID}"
+    volumes:
+      - "${APP_DATA_PATH:?Set a private host-local data directory}:/data"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=536870912,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python", "tools/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+networks:
+  default:
+    name: "${HEALTH_INFO_NETWORK:-health-info}"

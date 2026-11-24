@@ -1,0 +1,17 @@
+{% extends "records/base.html" %}
+{% block content %}
+  <h1>{{ title }}</h1>
+  {% if items %}
+    <ul class="timeline">
+      {% for item in items %}
+        <li>
+          <time datetime="{{ item.at|date:'c' }}">{{ item.at|date:"j M H:i" }}</time>
+          <span class="kind">{{ item.kind }}</span>
+          {% if item.url %}<a href="{{ item.url }}">{{ item.text }}</a>{% else %}{{ item.text }}{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty">Nothing recorded yet.</p>
+  {% endif %}
+{% endblock %}
