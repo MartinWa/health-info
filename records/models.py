@@ -431,6 +431,40 @@ class Vaccination(OwnedRecord):
         return self.vaccine
 
 
+class Lab(OwnedRecord):
+    """One analyte in a panel; exactly one of value and value_text."""
+
+    panel = models.CharField(max_length=100)
+    analyte = models.CharField(max_length=100)
+    value = models.DecimalField(max_digits=9, decimal_places=4, null=True, blank=True)
+    value_text = models.CharField(max_length=100, null=True, blank=True)
+    unit = models.CharField(max_length=32, blank=True)
+    ref_low = models.DecimalField(max_digits=9, decimal_places=4, null=True, blank=True)
+    ref_high = models.DecimalField(max_digits=9, decimal_places=4, null=True, blank=True)
+    fasting = models.BooleanField(null=True, blank=True)
+    collected_at = models.DateTimeField()
+    lab_name = models.CharField(max_length=200, blank=True)
+
+    class Meta(OwnedRecord.Meta):
+        verbose_name_plural = "labs"
+        ordering = ["-collected_at"]
+        indexes = [models.Index(fields=["user", "-collected_at"])]
+        constraints = [
+            models.CheckConstraint(
+                condition=(Q(value__isnull=False) & Q(value_text__isnull=True))
+                | (Q(value__isnull=True) & Q(value_text__isnull=False)),
+                name="lab_value_xor_text",
+            )
+        ]
+
+    def clean(self):
+        if (self.value is None) == (self.value_text is None):
+            raise ValidationError("A result needs a number or a text value, not both.")
+
+    def __str__(self):
+        return f"{self.panel} {self.analyte}"
+
+
 class Measurement(OwnedRecord):
     metric = models.CharField(max_length=32)
     value = models.DecimalField(max_digits=9, decimal_places=3, null=True, blank=True)
@@ -591,7 +625,9 @@ class MemoryEntry(OwnedRecord):
             raise ValidationError({"due_at": "A follow-up needs a due date."})
         if self.kind == "correction" and not self.corrects_id:
             raise ValidationError({"kind": "A correction must correct an existing entry."})
-        if self.corrects_id:
+        # These checks describe creating a correction; after it supersedes the old claim,
+        # the predecessor's status is legitimately no longer active.
+        if self.corrects_id and self._state.adding:
             if self.corrects.user_id != self.user_id:
                 raise ValidationError("Unknown entry.")
             if self.corrects.status != "active":
@@ -677,6 +713,7 @@ DOMAIN_MODELS = {
     "vaccinations": Vaccination,
     "appointments": Appointment,
     "notes": Note,
+    "labs": Lab,
     "memory": MemoryEntry,
 }
 

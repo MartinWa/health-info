@@ -81,3 +81,21 @@ def make_row(user):
         return V.RESOURCES[slug]["model"]._default_manager.create(user=user, **values)
 
     return make
+
+
+@pytest.fixture
+def api_token(user):
+    """(row, one-time secret) for the account's client token."""
+    return M.ApiToken.issue(user, "health-mcp")
+
+
+@pytest.fixture
+def api(api_token):
+    _, raw = api_token
+    return Client(HTTP_AUTHORIZATION=f"Bearer {raw}")
+
+
+@pytest.fixture
+def other_api(stranger):
+    _, raw = M.ApiToken.issue(stranger, "bob-token")
+    return Client(HTTP_AUTHORIZATION=f"Bearer {raw}")
