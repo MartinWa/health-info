@@ -46,6 +46,7 @@ RUN python -m venv --system-site-packages /state/venv \
 # settings. An env var would override pytest's choice and point tests at the WAL database.
 ENV PATH=/state/venv/bin:/opt/python/bin:$PATH \
     HEALTH_INFO_DATA_DIR=/state/development \
+    HEALTH_INFO_TEST_DATA_DIR=/state/test-state \
     TMPDIR=/state/tmp \
     RUFF_CACHE_DIR=/state/ruff-cache \
     PYTEST_ADDOPTS="-o cache_dir=/state/pytest-cache" \
