@@ -1,9 +1,14 @@
 """File-backed WAL tests isolated from development and production data."""
 
+import os
+from pathlib import Path
+
 from .base import *  # noqa: F403
 from .base import BASE_DIR, DATABASES
 
-TEST_DATA_DIR = BASE_DIR / ".data" / "test-state"
+# The container keeps test state on its writable volume; the bind-mounted checkout is not
+# writable by the unprivileged container user.
+TEST_DATA_DIR = Path(os.environ.get("HEALTH_INFO_TEST_DATA_DIR") or BASE_DIR / ".data/test-state")
 TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
 DATABASES["default"]["NAME"] = TEST_DATA_DIR / "db.sqlite3"
 DATABASES["default"]["TEST"] = {"NAME": TEST_DATA_DIR / "test.sqlite3"}
