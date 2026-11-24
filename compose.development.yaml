@@ -1,0 +1,29 @@
+# A standalone development stack: no .env, all state on named volumes, the working copy bound in.
+name: health-info-development
+services:
+  web:
+    build:
+      context: .
+      target: development
+    image: health-info:development
+    init: true
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - type: bind
+        source: .
+        target: /app
+      - development-state:/state
+      - editor-home:/home/developer
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  development-state:
+  editor-home:

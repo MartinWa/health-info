@@ -1,0 +1,8 @@
+# Build from this working copy instead of deploying a published image.
+services:
+  app:
+    image: health-info:local
+    pull_policy: build
+    build:
+      context: .
+      target: production
