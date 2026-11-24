@@ -1,3 +1,4 @@
+{% if at_default %}<input type="hidden" name="at_default" value="{{ at_default }}">{% endif %}
 {% if form.non_field_errors %}
   <div class="errors" role="alert">{{ form.non_field_errors }}</div>
 {% endif %}
@@ -27,7 +28,7 @@
 {% include "records/_pills.html" with field=form.posture %}
 {% include "records/_pills.html" with field=form.fasted %}
 
-<details class="details-panel">
+<details class="details-panel"{% if form.at.errors or form.note.errors %} open{% endif %}>
   <summary>Add time or note</summary>
   <div class="field{% if form.at.errors %} invalid{% endif %}">
     <label for="{{ form.at.id_for_label }}">{{ form.at.label }}</label>

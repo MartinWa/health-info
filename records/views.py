@@ -864,6 +864,7 @@ def dashboard(request):
     slots = S.planned_slots(user, today, today)
     lines = summary.domain_lines(user)
     profile = {"identity", "environment", "conditions", "allergies", "medications"}
+    measurement_form = F.BloodPressureForm(user=user)
     context = {
         "title": "Today",
         "lines": lines,
@@ -881,7 +882,8 @@ def dashboard(request):
         "all_taken": bool(slots) and all(slot["status"] == "taken" for slot in slots),
         "vitals": summary.vitals(user),
         "recent": summary.recent_activity(user),
-        "measurement_form": F.BloodPressureForm(user=user),
+        "measurement_form": measurement_form,
+        "measurement_at_default": _input_time(measurement_form.initial["at"]),
         "today": today,
         "greeting": _greeting(),
         "review_url": reverse("records:memory_review"),
@@ -897,6 +899,11 @@ def _greeting():
     if hour < 12:
         return "Good morning"
     return "Good afternoon" if hour < 18 else "Good evening"
+
+
+def _input_time(value):
+    """A datetime in the shape a datetime-local input posts back."""
+    return value.strftime("%Y-%m-%dT%H:%M") if value else ""
 
 
 def _singleton_form(request, form_class, instance, title, url_name, kind):
@@ -1024,7 +1031,12 @@ def quick(request):
 
 @login_required
 def quick_measurement(request):
-    form = F.BloodPressureForm(request.POST or None, user=request.user)
+    data = request.POST.copy() if request.method == "POST" else None
+    # The page pre-fills "measured at" when it loads. A form opened later in the day still
+    # carries that old minute, so an untouched timestamp is stamped again at submission.
+    if data and data.get("at_default") and data.get("at") == data.get("at_default"):
+        data["at"] = _input_time(timezone.localtime())
+    form = F.BloodPressureForm(data, user=request.user)
     if request.method == "POST" and form.is_valid():
         form.save()
         audit(request.user, "create", "records.Measurement")
@@ -1034,7 +1046,11 @@ def quick_measurement(request):
     return render(
         request,
         "records/measurement.html",
-        {"form": form, "title": "Blood pressure"},
+        {
+            "form": form,
+            "title": "Blood pressure",
+            "at_default": _input_time(form.initial.get("at")),
+        },
     )
 
 

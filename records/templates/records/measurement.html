@@ -9,7 +9,7 @@
 
   <form method="post" action="{% url 'records:quick_measurement' %}" class="record-form" novalidate>
     {% csrf_token %}
-    {% include "records/_measurement_form.html" %}
+    {% include "records/_measurement_form.html" with at_default=at_default %}
     <div class="actions">
       <button class="button" type="submit">Save reading</button>
       <a class="button quiet" href="{% url 'records:dashboard' %}">Cancel</a>

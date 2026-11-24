@@ -585,13 +585,15 @@ class BloodPressureForm(forms.Form):
     def save(self):
         at = self.cleaned_data["at"]
         fasted = self.cleaned_data.get("fasted")
+        side = self.cleaned_data.get("side") or ""
+        posture = self.cleaned_data.get("posture") or ""
         panel = M.Measurement.objects.create(
             user=self.user,
             metric="blood_pressure",
             at=at,
             note=self.cleaned_data.get("note") or "",
-            side=self.cleaned_data.get("side") or "",
-            posture=self.cleaned_data.get("posture") or "",
+            side=side,
+            posture=posture,
             fasted=None if not fasted else fasted == "yes",
         )
         for code in ("systolic_bp", "diastolic_bp"):
@@ -603,6 +605,9 @@ class BloodPressureForm(forms.Form):
                 unit=metric.unit,
                 at=at,
                 parent=panel,
+                # API-created readings carry the context on components too; match them.
+                side=side,
+                posture=posture,
             )
         if self.cleaned_data.get("pulse") is not None:
             M.Measurement.objects.create(

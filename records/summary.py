@@ -38,6 +38,7 @@ def _count(model, user, **filters):
 def _status(metric, value):
     if value is None:
         return None
+    value = float(value)
     if metric == "pulse":
         return "normal" if 60 <= value <= 100 else "borderline" if 50 <= value <= 110 else "out"
     return None
@@ -118,7 +119,7 @@ def vitals(user):
             "Pulse",
             _number(latest_pulse.value if latest_pulse else None),
             "/min",
-            _status("pulse", float(latest_pulse.value) if latest_pulse else None),
+            _status("pulse", latest_pulse.value if latest_pulse else None),
             latest_pulse.at if latest_pulse else None,
             _series(pulse),
         ),
@@ -162,11 +163,15 @@ def dose_groups(slots):
 
 
 def recent_activity(user, limit=6):
-    """Newest rows across the logged kinds, the same items the timeline lists."""
+    """Newest rows across the logged kinds, the same items the timeline lists.
+
+    Each source is capped at `limit` in the database: the newest `limit` of one kind is
+    the most it can contribute to the newest `limit` overall.
+    """
     items = []
 
-    def add(queryset, kind, text, url_name, when_field="at"):
-        for obj in queryset:
+    def add(queryset, kind, text, url_name, when_field="at", order="-at"):
+        for obj in queryset.order_by(order)[:limit]:
             items.append(
                 {
                     "at": getattr(obj, when_field),
@@ -177,7 +182,9 @@ def recent_activity(user, limit=6):
             )
 
     add(
-        M.Measurement._default_manager.filter(user=user, parent__isnull=True),
+        M.Measurement._default_manager.filter(user=user, parent__isnull=True).prefetch_related(
+            "components"
+        ),
         "Measurement",
         _measurement_text,
         "records:measurements_detail",
@@ -188,6 +195,7 @@ def recent_activity(user, limit=6):
         lambda obj: obj.name,
         "records:symptoms_detail",
         "onset_at",
+        "-onset_at",
     )
     add(
         M.Checkin._default_manager.filter(user=user),
@@ -202,12 +210,12 @@ def recent_activity(user, limit=6):
         "records:notes_detail",
     )
     add(
-        M.DoseEvent._default_manager.filter(user=user),
+        M.DoseEvent._default_manager.filter(user=user).select_related("medication"),
         "Dose",
         lambda obj: f"{obj.medication} {obj.status}",
         None,
     )
-    for period in M.Period._default_manager.filter(user=user):
+    for period in M.Period._default_manager.filter(user=user).order_by("-start")[:limit]:
         items.append(
             {
                 "at": timezone.make_aware(datetime.combine(period.start, datetime.min.time())),

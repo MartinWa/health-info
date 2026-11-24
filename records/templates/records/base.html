@@ -36,7 +36,7 @@
             <details class="user-menu">
               <summary aria-label="Account and more">
                 <span class="avatar" aria-hidden="true">{{ user.get_username|slice:":1" }}</span>
-                {{ user.get_username }}
+                <span class="user-name">{{ user.get_username }}</span>
               </summary>
               <div class="user-menu-panel">
                 <div class="menu-group">

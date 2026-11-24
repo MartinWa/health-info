@@ -21,12 +21,12 @@
   --surface: #ffffff;
   --surface-2: #f1f5f9;
   --ink: #0f172a;
-  --ink-2: #334155;
-  --muted: #64748b;
+  --ink-2: #1e293b;
+  --muted: #475569;
   --line: #e2e8f0;
   --line-strong: #cbd5e1;
-  --accent: #0d9488;
-  --accent-hover: #0f766e;
+  --accent: #0f766e;
+  --accent-hover: #115e59;
   --accent-ink: #ffffff;
   --accent-soft: #f0fdfa;
   --accent-line: #99f6e4;
@@ -624,7 +624,21 @@ table.records td a { font-weight: 500; }
   font-weight: 600;
   color: var(--ink-2);
 }
-.input, select, textarea {
+.input,
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="month"],
+input[type="week"],
+select,
+textarea {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -633,19 +647,26 @@ table.records td a { font-weight: 500; }
   background: var(--surface);
   color: var(--ink);
   font: inherit;
-  font-size: 15px;
+  /* 16px keeps iOS from zooming the page when a field takes focus. */
+  font-size: 16px;
 }
-.input:hover, select:hover, textarea:hover { border-color: var(--muted); }
-.input:focus, select:focus, textarea:focus {
+input:hover, select:hover, textarea:hover { border-color: var(--muted); }
+input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
+/* Number fields: no spinner arrows beside a reading. */
+input[type="number"] { -moz-appearance: textfield; }
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 textarea { min-height: 108px; resize: vertical; }
 .input.big { font-size: 28px; font-weight: 600; padding: 12px 14px; font-variant-numeric: tabular-nums; }
 .check-label { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 500; }
 .checkbox { width: 20px; height: 20px; accent-color: var(--accent); }
-.field.invalid .input, .field.invalid select, .field.invalid textarea { border-color: var(--risk-ink); }
+.field.invalid input:not([type="checkbox"]):not([type="radio"]),
+.field.invalid select,
+.field.invalid textarea { border-color: var(--risk-ink); }
 .errors { color: var(--risk-ink); font-size: 13px; margin-top: 6px; }
 .errors ul { margin: 4px 0 0; padding-left: 18px; list-style: none; }
 .errors li::before { content: "· "; }
@@ -939,6 +960,8 @@ code.token {
 /* --- Small screens ------------------------------------------------------------------ */
 
 @media (max-width: 860px) {
+  /* Static header: a sticky one plus a long menu would push links below the fold. */
+  .site-header { position: static; background: var(--bg); backdrop-filter: none; }
   .header-inner { padding: 10px 16px; gap: 10px; flex-wrap: wrap; }
   .main-nav { order: 3; width: 100%; overflow-x: auto; padding-bottom: 4px; }
   .header-actions { margin-left: auto; }
@@ -947,16 +970,26 @@ code.token {
   .card { padding: 20px; }
   .bento { gap: 16px; }
   .stack { gap: 16px; }
-  .user-menu-panel { grid-template-columns: 1fr; }
+  /* The menu becomes a bottom sheet: always on screen, scrolls inside itself. */
+  .user-menu-panel {
+    position: fixed;
+    inset: auto 12px 12px 12px;
+    grid-template-columns: 1fr;
+    width: auto;
+    max-height: min(80dvh, calc(100vh - 24px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
   .timeline li { grid-template-columns: 1fr auto; }
   .timeline .kind { grid-column: 2; grid-row: 1; }
   .detail div { grid-template-columns: 1fr; gap: 2px; }
   .record-form { padding: 20px; }
 }
 
-@media (max-width: 420px) {
-  .header-actions .button span { display: none; }
-  .header-actions .button { padding: 0 12px; }
+@media (max-width: 400px) {
+  .user-name { display: none; }
+  .user-menu summary { padding: 0 4px; }
+  .header-actions .button { padding: 0 14px; }
 }
 
 main > section + section { margin-top: 24px; }
