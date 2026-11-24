@@ -178,6 +178,29 @@ def test_a_saved_result_can_be_corrected_and_deleted(user, logged_in):
     assert not M.Lab._default_manager.filter(user=user).exists()
 
 
+def test_editing_one_result_keeps_the_panel_metadata_consistent(user, logged_in):
+    row = lab(user)
+    sibling = lab(user, analyte="HbA1c", lab_name="Old lab", fasting=False)
+    other_panel = lab(user, panel="Lipids", analyte="LDL", lab_name="Old lab")
+    response = logged_in.post(
+        reverse("records:labs_edit", args=[row.pk]),
+        {
+            "panel": "Metabolic",
+            "analyte": "Glucose",
+            "value": "5.9",
+            "unit": "mmol/L",
+            "collected_at": "2026-11-20T08:00",
+            "lab_name": "New lab",
+            "fasting": "true",
+        },
+    )
+    assert response.status_code == 303
+    group = M.Lab._default_manager.filter(user=user, panel="Metabolic")
+    assert {(row.lab_name, row.fasting) for row in group} == {("New lab", True)}
+    assert M.Lab._default_manager.get(pk=sibling.pk).lab_name == "New lab"
+    assert M.Lab._default_manager.get(pk=other_panel.pk).lab_name == "Old lab"
+
+
 def test_export_is_a_zip_of_only_the_signed_in_account(user, stranger, logged_in):
     lab(user)
     M.Note._default_manager.create(user=user, body="own note", at=timezone.now())
@@ -250,6 +273,39 @@ def test_search_finds_own_rows_only(user, stranger, logged_in):
     response = logged_in.get(reverse("records:search"), {"q": "squat"})
     assert response.status_code == 200
     assert [row["text"] for row in response.context["results"]] == ["squat felt heavy"]
+
+
+def test_search_covers_notes_outcome_notes_and_the_programme(user, logged_in):
+    M.Allergy._default_manager.create(
+        user=user, substance="Pollen", note="worst in birch season", source="client"
+    )
+    M.Appointment._default_manager.create(
+        user=user,
+        at=timezone.now(),
+        practitioner_name="Dr Example",
+        outcome_note="sentinel-outcome",
+    )
+    M.Program._default_manager.create(user=user, name="sentinel-programme 5x5")
+    for query, expected in (
+        ("birch", "Pollen"),
+        ("sentinel-outcome", "Dr Example 2026-11-24"),
+        ("sentinel-programme", "sentinel-programme 5x5"),
+    ):
+        response = logged_in.get(reverse("records:search"), {"q": query})
+        assert [row["text"] for row in response.context["results"]] == [expected], query
+
+
+def test_search_offers_a_continuation_past_ten_matches(user, logged_in):
+    for index in range(11):
+        M.Note._default_manager.create(user=user, body=f"squat note {index}", at=timezone.now())
+    first = logged_in.get(reverse("records:search"), {"q": "squat"})
+    assert len(first.context["results"]) == 10
+    assert [row["label"] for row in first.context["more"]] == ["notes"]
+
+    response = logged_in.get(first.context["more"][0]["url"])
+    assert [row["text"] for row in response.context["results"]] == ["squat note 0"]
+    assert response.context["back"].endswith("offset=0")
+    assert response.context["all_url"] == reverse("records:search") + "?q=squat"
 
 
 @pytest.mark.parametrize("query", ["", "zzz-no-such-text"])

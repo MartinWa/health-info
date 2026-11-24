@@ -20,7 +20,17 @@
         {% endfor %}
       </ul>
     {% else %}
-      <p class="empty">No record contains that text.</p>
+      <p class="empty">
+        {% if offset %}No more matches.{% else %}No record contains that text.{% endif %}
+      </p>
+    {% endif %}
+
+    {% if more or back or all_url %}
+      <nav class="pager" aria-label="More matches">
+        {% if back %}<a href="{{ back }}">Previous matches</a>{% endif %}
+        {% for row in more %}<a href="{{ row.url }}">More matches in {{ row.label }}</a>{% endfor %}
+        {% if all_url %}<a href="{{ all_url }}">Back to all matches</a>{% endif %}
+      </nav>
     {% endif %}
   {% endif %}
 {% endblock %}

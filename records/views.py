@@ -6,6 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from functools import partial
 from io import BytesIO
+from urllib.parse import urlencode
 
 from django.apps import apps
 from django.conf import settings
@@ -805,16 +806,29 @@ def labs_new(request):
     )
 
 
-LabEdit = type(
-    "labs_edit",
-    (RecordUpdate,),
-    {
-        "model": M.Lab,
-        "form_class": F.LabForm,
-        "title": "Edit result",
-        "success_url_name": "records:labs_detail",
-    },
-).as_view()
+class LabUpdate(RecordUpdate):
+    """Editing a result's panel metadata edits the panel, so the header cannot disagree."""
+
+    model = M.Lab
+    form_class = F.LabForm
+    title = "Edit result"
+    success_url_name = "records:labs_detail"
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        M.Lab._default_manager.filter(
+            user=self.request.user,
+            panel=self.object.panel,
+            collected_at=self.object.collected_at,
+        ).exclude(pk=self.object.pk).update(
+            lab_name=self.object.lab_name,
+            fasting=self.object.fasting,
+            updated_at=timezone.now(),
+        )
+        return response
+
+
+LabEdit = LabUpdate.as_view()
 
 LabDelete = type(
     "labs_delete",
@@ -1524,18 +1538,24 @@ def data_models():
 @login_required
 def export_data(request):
     user = request.user
-    payload = {
-        "exported_at": timezone.now().isoformat(),
-        "app_version": settings.APP_VERSION,
-        "registry_version": R.REGISTRY_VERSION,
-        "tables": {
-            model._meta.label: [
-                {field.name: field.value_from_object(obj) for field in model._meta.concrete_fields}
-                for obj in model._default_manager.filter(user=user)
-            ]
-            for model in data_models()
-        },
-    }
+    # One snapshot: a concurrent write must not leave the zip with a dose whose course is
+    # missing. SQLite's IMMEDIATE transaction mode takes the writer lock for the whole read.
+    with transaction.atomic():
+        payload = {
+            "exported_at": timezone.now().isoformat(),
+            "app_version": settings.APP_VERSION,
+            "registry_version": R.REGISTRY_VERSION,
+            "tables": {
+                model._meta.label: [
+                    {
+                        field.name: field.value_from_object(obj)
+                        for field in model._meta.concrete_fields
+                    }
+                    for obj in model._default_manager.filter(user=user)
+                ]
+                for model in data_models()
+            },
+        }
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr(
@@ -1574,46 +1594,108 @@ def purge(request):
     return see_other(reverse("records:dashboard"))
 
 
+SEARCH_LIMIT = 10
+
+# (model, searched fields, page, does that page take the row's pk). Free text only: no
+# codes, no JSON fields, and no singleton without a page of its own.
 SEARCH_TARGETS = (
-    (M.MemoryEntry, ("statement", "subject"), "records:memory_detail"),
-    (M.Note, ("body",), "records:notes_detail"),
-    (M.Symptom, ("name", "trigger", "note"), "records:symptoms_detail"),
-    (M.Condition, ("name", "code", "note"), "records:conditions_detail"),
-    (M.Injury, ("mechanism", "rehab"), "records:injuries_detail"),
-    (M.Allergy, ("substance", "reaction"), "records:allergies_detail"),
-    (M.Medication, ("substance", "indication", "purpose_note"), "records:medications_detail"),
-    (M.Vaccination, ("vaccine", "lot"), "records:vaccinations_detail"),
-    (M.Lab, ("panel", "analyte"), "records:labs_detail"),
-    (M.Measurement, ("note", "device"), "records:measurements_detail"),
-    (M.Appointment, ("practitioner_name", "place", "reason"), "records:appointments_detail"),
-    (M.Period, ("note",), "records:periods_detail"),
-    (M.Checkin, ("note",), "records:checkins_detail"),
-    (M.Practitioner, ("name", "specialty", "organisation"), "records:practitioners_detail"),
-    (M.Goal, ("note",), "records:goals_detail"),
+    (M.MemoryEntry, ("statement", "subject"), "records:memory_detail", True),
+    (M.Note, ("body",), "records:notes_detail", True),
+    (M.Symptom, ("name", "trigger", "note"), "records:symptoms_detail", True),
+    (M.Condition, ("name", "code", "note", "abatement"), "records:conditions_detail", True),
+    (M.Injury, ("mechanism", "rehab"), "records:injuries_detail", True),
+    (M.Allergy, ("substance", "reaction", "note"), "records:allergies_detail", True),
+    (
+        M.Medication,
+        ("substance", "indication", "purpose_note"),
+        "records:medications_detail",
+        True,
+    ),
+    (M.Vaccination, ("vaccine", "lot", "site"), "records:vaccinations_detail", True),
+    (M.Lab, ("panel", "analyte", "lab_name"), "records:labs_detail", True),
+    (M.Measurement, ("note", "device"), "records:measurements_detail", True),
+    (
+        M.Appointment,
+        ("practitioner_name", "place", "reason", "outcome_note"),
+        "records:appointments_detail",
+        True,
+    ),
+    (M.Period, ("note",), "records:periods_detail", True),
+    (M.Checkin, ("note",), "records:checkins_detail", True),
+    (
+        M.Practitioner,
+        ("name", "specialty", "organisation", "contact"),
+        "records:practitioners_detail",
+        True,
+    ),
+    (M.Goal, ("note",), "records:goals_detail", True),
+    (M.Program, ("name", "phase", "progression"), "records:program", False),
+    (M.Environment, ("notes",), "records:environment", False),
 )
+
+
+def _search_hits(user, model, fields, query, offset):
+    condition = Q()
+    for name in fields:
+        condition |= Q(**{f"{name}__icontains": query})
+    return model._default_manager.filter(user=user).filter(condition)[
+        offset : offset + SEARCH_LIMIT + 1
+    ]
 
 
 @login_required
 def search(request):
     query = request.GET.get("q", "").strip()
+    kind = request.GET.get("kind", "")
+    raw_offset = request.GET.get("offset", "0")
+    offset = int(raw_offset) if raw_offset.isdigit() else 0
     results = []
+    more = []
+    search_url = reverse("records:search")
     if query:
-        for model, fields, url_name in SEARCH_TARGETS:
-            condition = Q()
-            for name in fields:
-                condition |= Q(**{f"{name}__icontains": query})
-            for obj in model._default_manager.filter(user=request.user).filter(condition)[:10]:
+        for model, fields, url_name, by_pk in SEARCH_TARGETS:
+            if kind and kind != url_name:
+                continue
+            hits = list(_search_hits(request.user, model, fields, query, offset))
+            for obj in hits[:SEARCH_LIMIT]:
                 results.append(
                     {
                         "text": str(obj),
                         "kind": model._meta.verbose_name,
-                        "url": reverse(url_name, args=[obj.pk]),
+                        "url": reverse(url_name, args=[obj.pk]) if by_pk else reverse(url_name),
                     }
                 )
+            if len(hits) > SEARCH_LIMIT:
+                more.append(
+                    {
+                        "label": model._meta.verbose_name_plural,
+                        "url": search_url
+                        + "?"
+                        + urlencode(
+                            {"q": query, "kind": url_name, "offset": offset + SEARCH_LIMIT}
+                        ),
+                    }
+                )
+    back = (
+        search_url
+        + "?"
+        + urlencode({"q": query, "kind": kind, "offset": max(0, offset - SEARCH_LIMIT)})
+        if kind and offset
+        else ""
+    )
     return render(
         request,
         "records/search.html",
-        {"title": "Search", "query": query, "results": results[:100]},
+        {
+            "title": "Search",
+            "query": query,
+            "results": results,
+            "more": more,
+            "kind": kind,
+            "offset": offset,
+            "back": back,
+            "all_url": search_url + "?" + urlencode({"q": query}) if kind else "",
+        },
     )
 
 
