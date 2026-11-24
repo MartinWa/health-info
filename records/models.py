@@ -1,13 +1,16 @@
 """The data model: owner-scoped records, current-state rows, no revisions or tombstones."""
 
+import hashlib
+import secrets
 from datetime import date
 from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxLengthValidator
-from django.db import models
+from django.db import models, transaction
 from django.db.models import F, Q
+from django.utils import timezone
 
 from records import registries as R
 
@@ -122,6 +125,23 @@ class ApiToken(models.Model):
 
     def __str__(self):
         return self.name
+
+    @classmethod
+    def issue(cls, user, name, expires_at=None):
+        """Return the row and the one-time secret; only the digest is stored."""
+        raw = "hi_" + secrets.token_urlsafe(32)
+        token = cls._default_manager.create(
+            user=user,
+            name=name,
+            prefix=raw[:12],
+            key_hash=hashlib.sha256(raw.encode()).hexdigest(),
+            expires_at=expires_at,
+        )
+        return token, raw
+
+    def revoke(self):
+        self.revoked_at = timezone.now()
+        self.save(update_fields=["revoked_at"])
 
 
 class AuditEvent(models.Model):
@@ -520,6 +540,89 @@ class Note(OwnedRecord):
         return self.body[:60]
 
 
+class MemoryEntry(OwnedRecord):
+    """One claim per row, the owner's wording; a changed claim is a new correction."""
+
+    kind = models.CharField(max_length=14, choices=R.choices(R.MEMORY_KIND))
+    subject = models.CharField(max_length=64)
+    statement = models.CharField(max_length=280)
+    observed_at = models.DateTimeField()
+    source_ref = models.CharField(max_length=200, blank=True)
+    importance = models.PositiveSmallIntegerField(default=3)
+    status = models.CharField(max_length=10, choices=R.choices(R.MEMORY_STATUS), default="active")
+    corrects = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.PROTECT, related_name="corrected_by"
+    )
+    valid_until = models.DateTimeField(null=True, blank=True)
+    pinned = models.BooleanField(default=False)
+    locked = models.BooleanField(default=False)
+    due_at = models.DateTimeField(null=True, blank=True)
+    tags = models.JSONField(default=list, blank=True)
+
+    class Meta(OwnedRecord.Meta):
+        verbose_name_plural = "memory entries"
+        ordering = ["-observed_at"]
+        indexes = [
+            models.Index(fields=["user", "status", "kind", "subject"]),
+            models.Index(fields=["user", "pinned", "-observed_at"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(importance__gte=1, importance__lte=5), name="memory_importance_range"
+            ),
+            models.CheckConstraint(
+                condition=Q(due_at__isnull=False) | ~Q(kind="follow_up"),
+                name="memory_follow_up_has_due_at",
+            ),
+            models.CheckConstraint(
+                condition=Q(valid_until__gte=F("observed_at")) | Q(valid_until__isnull=True),
+                name="memory_valid_until_after_observed",
+            ),
+        ]
+
+    @property
+    def recorded_at(self):
+        """When the row was written; created_at never changes."""
+        return self.created_at
+
+    def clean(self):
+        self.subject = R.normalise_subject(self.subject)
+        if self.kind == "follow_up" and self.due_at is None:
+            raise ValidationError({"due_at": "A follow-up needs a due date."})
+        if self.kind == "correction" and not self.corrects_id:
+            raise ValidationError({"kind": "A correction must correct an existing entry."})
+        if self.corrects_id:
+            if self.corrects.user_id != self.user_id:
+                raise ValidationError({"corrects": "Unknown entry."})
+            if self.observed_at < self.corrects.observed_at:
+                raise ValidationError(
+                    {"observed_at": "A correction cannot be observed before the claim it corrects."}
+                )
+
+    def __str__(self):
+        return self.statement
+
+
+def supersede(old, correction):
+    """One transaction: the correction replaces the claim and dates the old row out."""
+    with transaction.atomic():
+        old = (
+            MemoryEntry._default_manager.filter(user_id=correction.user_id)
+            .select_for_update()
+            .get(pk=old.pk)
+        )
+        if old.locked:
+            raise ValidationError("This entry is locked; unlock it before correcting it.")
+        correction.corrects = old
+        correction.kind = "correction"
+        correction.status = "active"
+        correction.save()
+        old.status = "superseded"
+        old.valid_until = correction.observed_at
+        old.save(update_fields=["status", "valid_until", "updated_at"])
+    return correction
+
+
 class Appointment(OwnedRecord):
     at = models.DateTimeField()
     practitioner = models.ForeignKey(
@@ -569,6 +672,7 @@ DOMAIN_MODELS = {
     "vaccinations": Vaccination,
     "appointments": Appointment,
     "notes": Note,
+    "memory": MemoryEntry,
 }
 
 

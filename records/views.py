@@ -2,6 +2,7 @@
 
 from datetime import date, datetime
 from decimal import Decimal
+from functools import partial
 
 from django.conf import settings
 from django.contrib import messages
@@ -9,7 +10,8 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
-from django.db.models import ProtectedError
+from django.core.paginator import Paginator
+from django.db.models import ProtectedError, Q
 from django.http import (
     Http404,
     HttpResponse,
@@ -144,6 +146,7 @@ class RecordDetail(LoginRequiredMixin, OwnedMixin, DetailView):
     edit_url_name = None
     delete_url_name = None
     exclude_metrics = frozenset()
+    detail_actions = None
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -159,6 +162,7 @@ class RecordDetail(LoginRequiredMixin, OwnedMixin, DetailView):
             else None,
             source=self.object.source,
             reported_by=self.object.reported_by,
+            detail_actions=self.detail_actions(self.object) if self.detail_actions else [],
         )
         components = getattr(self.object, "components", None)
         if components is not None and components.exists():
@@ -274,6 +278,15 @@ def notify_warnings(request, form):
 
 
 # --- Resource table: one place ties model, form, columns and routes --------------------
+
+
+def symptom_actions(symptom):
+    """Promote a symptom into the clinical record, with onset and area prefilled."""
+    return [
+        (label, reverse("records:promote_symptom", args=[symptom.pk, target]))
+        for label, target in (("Make an injury", "injury"), ("Make a condition", "condition"))
+    ]
+
 
 RESOURCES = {
     "goals": {
@@ -496,6 +509,7 @@ RESOURCES = {
             "source",
             "reported_by",
         ],
+        "detail_actions": symptom_actions,
     },
     "checkins": {
         "model": M.Checkin,
@@ -566,6 +580,9 @@ def resource_views(slug, config):
             "exclude_metrics": config.get("exclude_metrics", frozenset()),
             "edit_url_name": f"{names}_edit",
             "delete_url_name": f"{names}_delete",
+            "detail_actions": staticmethod(config["detail_actions"])
+            if config.get("detail_actions")
+            else None,
         },
     ).as_view()
     create_view = type(
@@ -643,6 +660,10 @@ def dashboard(request):
         ).order_by("at")[:3],
         "slots": S.planned_slots(user, today, today),
         "today": today,
+        "review_url": reverse("records:memory_review"),
+        "follow_ups": M.MemoryEntry._default_manager.filter(
+            user=user, kind="follow_up", status="active", due_at__lte=timezone.now()
+        ).order_by("due_at")[:5],
     }
     return render(request, "records/dashboard.html", context)
 
@@ -730,6 +751,7 @@ DOMAIN_URLS = {
     "symptoms": "records:symptoms_list",
     "checkins": "records:checkins_list",
     "notes": "records:notes_list",
+    "memory": "records:memory_list",
 }
 
 
@@ -909,6 +931,375 @@ def timeline(request):
         )
     items.sort(key=lambda item: item["at"], reverse=True)
     return render(request, "records/timeline.html", {"title": "Timeline", "items": items[:100]})
+
+
+# --- Memory, tokens, settings and audit -----------------------------------------------
+
+
+def _paged(request, queryset, per_page=50, **context):
+    page = Paginator(queryset, per_page).get_page(request.GET.get("page"))
+    params = request.GET.copy()
+    params.pop("page", None)
+    context.update(entries=page.object_list, page_obj=page, pager_query=params.urlencode())
+    return context
+
+
+@login_required
+def memory_list(request):
+    query = M.MemoryEntry._default_manager.filter(user=request.user)
+    status = request.GET.get("status", "active")
+    if status not in R.MEMORY_STATUS + ("all",):
+        status = "active"
+    if status in R.MEMORY_STATUS:
+        query = query.filter(status=status)
+    kind = request.GET.get("kind", "")
+    if kind in R.MEMORY_KIND:
+        query = query.filter(kind=kind)
+    subject = R.normalise_subject(request.GET.get("subject", ""))
+    if subject:
+        query = query.filter(subject__iexact=subject)
+    search = request.GET.get("q", "").strip()
+    if search:
+        query = query.filter(Q(statement__icontains=search) | Q(subject__icontains=search))
+    context = _paged(
+        request,
+        query,
+        title="Memory",
+        statuses=R.MEMORY_STATUS,
+        kinds=R.MEMORY_KIND,
+        filters={"status": status, "kind": kind, "subject": subject, "q": search},
+        subjects=M.MemoryEntry._default_manager.filter(user=request.user)
+        .values_list("subject", flat=True)
+        .distinct()
+        .order_by("subject"),
+    )
+    return render(request, "records/memory_list.html", context)
+
+
+def _memory_entry(request, pk):
+    return get_object_or_404(M.MemoryEntry._default_manager.filter(user=request.user), pk=pk)
+
+
+@login_required
+def memory_detail(request, pk):
+    entry = _memory_entry(request, pk)
+    ancestors = []
+    node = entry
+    while node.corrects_id:
+        node = M.MemoryEntry._default_manager.get(pk=node.corrects_id, user=request.user)
+        ancestors.append(node)
+    return render(
+        request,
+        "records/memory_detail.html",
+        {
+            "title": "Memory entry",
+            "entry": entry,
+            "ancestors": ancestors,
+            "corrections": entry.corrected_by.all(),
+            "tags": ", ".join(entry.tags),
+        },
+    )
+
+
+@login_required
+def memory_new(request):
+    form = F.MemoryForm(
+        request.POST or None,
+        user=request.user,
+        initial={"observed_at": timezone.localtime().replace(second=0, microsecond=0)},
+    )
+    if request.method == "POST" and form.is_valid():
+        entry = form.save()
+        audit(request.user, "create", "records.MemoryEntry", entry.pk)
+        messages.success(request, "Saved.")
+        return see_other(reverse("records:memory_detail", args=[entry.pk]))
+    return render(
+        request,
+        "records/form.html",
+        {
+            "form": form,
+            "title": "Add a memory entry",
+            "submit_label": "Save",
+            "cancel_url": reverse("records:memory_list"),
+        },
+    )
+
+
+@login_required
+def memory_edit(request, pk):
+    entry = _memory_entry(request, pk)
+    if entry.locked:
+        messages.error(request, "This entry is locked; unlock it before editing it.")
+        return see_other(reverse("records:memory_detail", args=[entry.pk]))
+    form = F.MemoryEditForm(request.POST or None, user=request.user, instance=entry)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        audit(request.user, "update", "records.MemoryEntry", entry.pk)
+        messages.success(request, "Saved.")
+        return see_other(reverse("records:memory_detail", args=[entry.pk]))
+    return render(
+        request,
+        "records/form.html",
+        {
+            "form": form,
+            "title": "Edit wording or tags",
+            "submit_label": "Save",
+            "cancel_url": reverse("records:memory_detail", args=[entry.pk]),
+        },
+    )
+
+
+@login_required
+def memory_correct(request, pk):
+    old = _memory_entry(request, pk)
+    if old.locked:
+        messages.error(request, "This entry is locked; unlock it before correcting it.")
+        return see_other(reverse("records:memory_detail", args=[old.pk]))
+    instance = M.MemoryEntry(user=request.user, corrects=old, subject=old.subject)
+    form = F.MemoryCorrectionForm(request.POST or None, user=request.user, instance=instance)
+    if request.method == "GET":
+        form.initial.update(
+            subject=old.subject,
+            observed_at=timezone.localtime().replace(second=0, microsecond=0),
+            importance=old.importance,
+            tags=", ".join(old.tags),
+        )
+    if request.method == "POST" and form.is_valid():
+        try:
+            entry = form.save()
+        except ValidationError:
+            messages.error(request, "This entry is locked; unlock it before correcting it.")
+            return see_other(reverse("records:memory_detail", args=[old.pk]))
+        audit(request.user, "correct", "records.MemoryEntry", entry.pk)
+        messages.success(request, "Saved as a correction; the old claim is superseded.")
+        return see_other(reverse("records:memory_detail", args=[entry.pk]))
+    return render(
+        request,
+        "records/form.html",
+        {
+            "form": form,
+            "title": "Correct the claim",
+            "submit_label": "Save correction",
+            "cancel_url": reverse("records:memory_detail", args=[old.pk]),
+        },
+    )
+
+
+@login_required
+def memory_delete(request, pk):
+    entry = _memory_entry(request, pk)
+    if entry.locked:
+        messages.error(request, "This entry is locked; unlock it before deleting it.")
+        return see_other(reverse("records:memory_detail", args=[entry.pk]))
+    if request.method != "POST":
+        return render(request, "records/delete.html", {"title": "Forget this entry"})
+    object_id = entry.pk
+    try:
+        entry.delete()
+    except ProtectedError:
+        messages.error(request, "A newer entry corrects this one; delete that first.")
+        return see_other(reverse("records:memory_detail", args=[entry.pk]))
+    audit(request.user, "delete", "records.MemoryEntry", object_id)
+    messages.success(request, "Deleted.")
+    return see_other(reverse("records:memory_list"))
+
+
+def _toggle(request, pk, field, label):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    entry = _memory_entry(request, pk)
+    setattr(entry, field, not getattr(entry, field))
+    entry.save(update_fields=[field, "updated_at"])
+    audit(request.user, "update", "records.MemoryEntry", entry.pk, {field: getattr(entry, field)})
+    messages.success(request, f"{label} off." if not getattr(entry, field) else f"{label} on.")
+    return see_other(reverse("records:memory_detail", args=[entry.pk]))
+
+
+memory_pin = login_required(partial(_toggle, field="pinned", label="Pinned"))
+memory_lock = login_required(partial(_toggle, field="locked", label="Locked"))
+
+
+@login_required
+def memory_done(request, pk):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    entry = _memory_entry(request, pk)
+    entry.status = "done"
+    entry.save(update_fields=["status", "updated_at"])
+    audit(request.user, "update", "records.MemoryEntry", entry.pk, {"status": "done"})
+    messages.success(request, "Follow-up closed.")
+    return see_other(reverse("records:memory_detail", args=[entry.pk]))
+
+
+REVIEW_KINDS = {
+    "injuries": (M.Injury, "records:injuries_detail", "records:injuries_edit"),
+    "conditions": (M.Condition, "records:conditions_detail", "records:conditions_edit"),
+}
+
+SPOT_MODELS = (
+    (M.MemoryEntry, "records:memory_detail", {}),
+    (M.Note, "records:notes_detail", {}),
+    (M.Measurement, "records:measurements_detail", {"parent__isnull": True}),
+    (M.Symptom, "records:symptoms_detail", {}),
+    (M.Checkin, "records:checkins_detail", {}),
+    (M.Period, "records:periods_detail", {}),
+    (M.Appointment, "records:appointments_detail", {}),
+)
+
+
+@login_required
+def memory_review(request):
+    user = request.user
+    if request.method == "POST":
+        model, _, _ = REVIEW_KINDS.get(request.POST.get("kind", ""), (None, None, None))
+        action = request.POST.get("action")
+        if model is None or action not in ("confirm", "dismiss"):
+            raise Http404
+        if not request.POST.get("id", "").isdigit():
+            raise Http404
+        obj = get_object_or_404(
+            model._default_manager.filter(user=user, source="client"), pk=int(request.POST["id"])
+        )
+        obj.verification_status = "confirmed" if action == "confirm" else "refuted"
+        obj.save(update_fields=["verification_status", "updated_at"])
+        audit(user, f"review_{action}", model._meta.label, obj.pk)
+        messages.success(request, "Confirmed." if action == "confirm" else "Dismissed.")
+        return see_other(reverse("records:memory_review"))
+    rows = [
+        {
+            "text": str(obj),
+            "kind": slug,
+            "id": obj.pk,
+            "url": reverse(url_name, args=[obj.pk]),
+            "edit_url": reverse(edit_url, args=[obj.pk]),
+            "reported_by": obj.reported_by or obj.source,
+        }
+        for slug, (model, url_name, edit_url) in REVIEW_KINDS.items()
+        for obj in model._default_manager.filter(
+            user=user, source="client", verification_status="unconfirmed"
+        )
+    ]
+    spot = sorted(
+        (
+            (obj.created_at, str(obj), model._meta.verbose_name, url_name, obj.pk)
+            for model, url_name, extra in SPOT_MODELS
+            for obj in model._default_manager.filter(user=user, source="client", **extra).order_by(
+                "-created_at"
+            )[:5]
+        ),
+        reverse=True,
+    )[:20]
+    return render(
+        request,
+        "records/memory_review.html",
+        {
+            "title": "Review client writes",
+            "rows": rows,
+            "spot": [
+                {"text": text, "kind": kind, "url": reverse(url_name, args=[pk])}
+                for _, text, kind, url_name, pk in spot
+            ],
+        },
+    )
+
+
+@login_required
+def promote_symptom(request, pk, target):
+    symptom = get_object_or_404(M.Symptom._default_manager.filter(user=request.user), pk=pk)
+    onset = timezone.localtime(symptom.onset_at).date()
+    if target == "injury":
+        form_class, label, url_name = F.InjuryForm, "records.Injury", "records:injuries_detail"
+        initial = {"since": onset, "area": symptom.body_area or "other", "side": symptom.side}
+    elif target == "condition":
+        form_class, label, url_name = (
+            F.ConditionForm,
+            "records.Condition",
+            "records:conditions_detail",
+        )
+        initial = {"name": symptom.name, "since": onset, "note": symptom.note}
+    else:
+        raise Http404
+    form = form_class(request.POST or None, user=request.user, initial=initial)
+    if request.method == "POST" and form.is_valid():
+        obj = form.save()
+        audit(request.user, "promote", label, obj.pk)
+        messages.success(request, "Created from the symptom; the symptom is unchanged.")
+        return see_other(reverse(url_name, args=[obj.pk]))
+    return render(
+        request,
+        "records/form.html",
+        {
+            "form": form,
+            "title": f"Promote symptom to {target}",
+            "submit_label": "Save",
+            "cancel_url": reverse("records:symptoms_detail", args=[symptom.pk]),
+        },
+    )
+
+
+@login_required
+def tokens(request):
+    user = request.user
+    new_token = request.session.pop("new_token", None)
+    form = F.TokenForm(request.POST or None, user=user)
+    if request.method == "POST" and form.is_valid():
+        token, new_token = M.ApiToken.issue(
+            user, form.cleaned_data["name"], form.cleaned_data.get("expires_at")
+        )
+        audit(user, "token_issue", "records.ApiToken", token.pk)
+        request.session["new_token"] = new_token
+        messages.success(request, "Token issued.")
+        return see_other(reverse("records:tokens"))
+    return render(
+        request,
+        "records/tokens.html",
+        {
+            "title": "Tokens",
+            "form": form,
+            "rows": M.ApiToken._default_manager.filter(user=user),
+            "new_token": new_token,
+        },
+    )
+
+
+@login_required
+def token_revoke(request, pk):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    token = get_object_or_404(M.ApiToken._default_manager.filter(user=request.user), pk=pk)
+    token.revoke()
+    audit(request.user, "token_revoke", "records.ApiToken", token.pk)
+    messages.success(request, "Token revoked.")
+    return see_other(reverse("records:tokens"))
+
+
+@login_required
+def settings_page(request):
+    user = request.user
+    person = M.Person._default_manager.filter(user=user).first()
+    return render(
+        request,
+        "records/settings.html",
+        {
+            "title": "Settings",
+            "person": person,
+            "tokens": M.ApiToken._default_manager.filter(
+                user=user, revoked_at__isnull=True
+            ).count(),
+            "version": settings.APP_VERSION,
+        },
+    )
+
+
+@login_required
+def audit_log(request):
+    context = _paged(
+        request,
+        M.AuditEvent._default_manager.filter(user=request.user),
+        per_page=100,
+        title="Audit",
+    )
+    return render(request, "records/audit.html", context)
 
 
 # --- Session auth ---------------------------------------------------------------------

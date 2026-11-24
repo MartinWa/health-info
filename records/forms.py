@@ -579,6 +579,83 @@ class CheckinForm(OwnerForm):
             )
 
 
+class MemoryForm(OwnerForm):
+    observed_at = LocalDateTimeField()
+    due_at = LocalDateTimeField(required=False)
+    tags = forms.CharField(required=False, help_text="Comma separated.")
+
+    class Meta:
+        model = M.MemoryEntry
+        fields = [
+            "kind",
+            "subject",
+            "statement",
+            "observed_at",
+            "importance",
+            "source_ref",
+            "tags",
+            "pinned",
+            "due_at",
+        ]
+        help_texts = {
+            "subject": "One slug, e.g. training, sleep, medication.",
+            "statement": "One claim, in your own words. 280 characters.",
+            "observed_at": "When this was true, not when you typed it.",
+            "source_ref": "Where it came from: a conversation, a report, a device.",
+            "due_at": "Required for a follow-up.",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.initial["tags"] = ", ".join(self.instance.tags)
+
+    def clean_tags(self):
+        return [part.strip() for part in self.cleaned_data["tags"].split(",") if part.strip()]
+
+
+class MemoryEditForm(MemoryForm):
+    """Typos, tags and pinning; a changed claim is a correction, not an edit."""
+
+    class Meta(MemoryForm.Meta):
+        fields = ["subject", "statement", "tags", "pinned", "due_at"]
+
+
+class MemoryCorrectionForm(MemoryForm):
+    """A new row that replaces the old claim; the server writes the supersede chain."""
+
+    class Meta(MemoryForm.Meta):
+        fields = ["subject", "statement", "observed_at", "importance", "source_ref", "tags"]
+
+    def save(self, commit=True):
+        old = M.MemoryEntry._default_manager.get(pk=self.instance.corrects_id, user_id=self.user.pk)
+        self.instance = super().save(commit=False)
+        return M.supersede(old, self.instance)
+
+
+class TokenForm(forms.Form):
+    name = forms.CharField(max_length=100, help_text="Where this token is used, e.g. health-mcp.")
+    expires_at = forms.DateTimeField(
+        required=False,
+        label="Expires at",
+        widget=LocalDateTimeInput(attrs={"class": "input"}),
+        help_text="Leave empty for no expiry.",
+    )
+
+    def __init__(self, *args, user, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+        self.fields["name"].widget.attrs.setdefault("class", "input")
+
+    def clean_name(self):
+        name = self.cleaned_data["name"].strip()
+        if M.ApiToken._default_manager.filter(
+            user=self.user, name=name, revoked_at__isnull=True
+        ).exists():
+            raise ValidationError("An active token already has this name.")
+        return name
+
+
 class NoteForm(OwnerForm):
     tags = forms.CharField(required=False, help_text="Comma separated.")
 

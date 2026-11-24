@@ -17,6 +17,7 @@
           <a href="{% url 'records:dashboard' %}">Today</a>
           <a href="{% url 'records:quick' %}">Quick add</a>
           <a href="{% url 'records:timeline' %}">Timeline</a>
+          <a href="{% url 'records:memory_list' %}">Memory</a>
           <a href="{% url 'records:regimen' %}">Regimen</a>
         </nav>
         <details class="user-menu">
@@ -38,6 +39,11 @@
             <a href="{% url 'records:checkins_list' %}">Check-ins</a>
             <a href="{% url 'records:periods_list' %}">Periods</a>
             <a href="{% url 'records:notes_list' %}">Notes</a>
+            <a href="{% url 'records:memory_list' %}">Memory</a>
+            <a href="{% url 'records:memory_review' %}">Review client writes</a>
+            <a href="{% url 'records:tokens' %}">Tokens</a>
+            <a href="{% url 'records:audit' %}">Audit</a>
+            <a href="{% url 'records:settings' %}">Settings</a>
             <a href="{% url 'password' %}">Change password</a>
             {% if user.is_staff %}<a href="{% url 'admin:index' %}">Administration</a>{% endif %}
             <form method="post" action="{% url 'logout' %}">

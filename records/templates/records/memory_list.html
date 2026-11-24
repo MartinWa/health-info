@@ -1,0 +1,62 @@
+{% extends "records/base.html" %}
+{% block content %}
+  <div class="page-head">
+    <h1>{{ title }}</h1>
+    <a class="button" href="{% url 'records:memory_new' %}">Add</a>
+  </div>
+
+  {% if entries %}
+    <ul class="plain">
+      {% for entry in entries %}
+        <li class="strip">
+          <a href="{% url 'records:memory_detail' entry.pk %}">{{ entry.statement }}</a>
+          <p class="hint">
+            {{ entry.get_kind_display }} · {{ entry.subject }} · {{ entry.observed_at|date:"j M Y" }}
+            {% if entry.pinned %}· pinned{% endif %}
+            {% if entry.locked %}· locked{% endif %}
+            {% if entry.status != "active" %}· {{ entry.get_status_display }}{% endif %}
+            {% if entry.source != "owner" %}· {{ entry.reported_by|default:entry.source }}{% endif %}
+          </p>
+        </li>
+      {% endfor %}
+    </ul>
+    {% include "records/pager.html" %}
+  {% else %}
+    <p class="empty">Nothing recorded yet.</p>
+  {% endif %}
+
+  <form method="get" class="record-form compact" aria-label="Filter memory">
+    <div class="field">
+      <label for="q">Search</label>
+      <input class="input" id="q" name="q" value="{{ filters.q }}">
+    </div>
+    <div class="field">
+      <label for="kind">Kind</label>
+      <select class="input" id="kind" name="kind">
+        <option value="">Any</option>
+        {% for value in kinds %}
+          <option value="{{ value }}"{% if filters.kind == value %} selected{% endif %}>{{ value|capfirst }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="status">Status</label>
+      <select class="input" id="status" name="status">
+        {% for value in statuses %}
+          <option value="{{ value }}"{% if filters.status == value %} selected{% endif %}>{{ value|capfirst }}</option>
+        {% endfor %}
+        <option value="all"{% if filters.status == "all" %} selected{% endif %}>Any</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="subject">Subject</label>
+      <select class="input" id="subject" name="subject">
+        <option value="">Any</option>
+        {% for value in subjects %}
+          <option value="{{ value }}"{% if filters.subject == value %} selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="actions"><button class="button" type="submit">Filter</button></div>
+  </form>
+{% endblock %}

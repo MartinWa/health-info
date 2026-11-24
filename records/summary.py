@@ -143,6 +143,14 @@ def domain_lines(user):
             "View",
         ),
         ("notes", f"{_count(M.Note, user)} recorded", "records:notes_list", "View"),
+        (
+            "memory",
+            f"{_count(M.MemoryEntry, user, status='active')} active"
+            f" · {_count(M.MemoryEntry, user, kind='follow_up', status='active')} follow-up"
+            f"{'s' if _count(M.MemoryEntry, user, kind='follow_up', status='active') != 1 else ''}",
+            "records:memory_list",
+            "Open",
+        ),
     ]
     return [
         {

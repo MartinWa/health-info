@@ -11,6 +11,7 @@
   </dl>
   <div class="actions">
     {% if edit_url %}<a class="button" href="{{ edit_url }}">Edit</a>{% endif %}
+    {% for label, url in detail_actions %}<a class="button quiet" href="{{ url }}">{{ label }}</a>{% endfor %}
     {% if delete_url %}<a class="button danger" href="{{ delete_url }}">Delete</a>{% endif %}
     <a class="button quiet" href="javascript:history.back()">Back</a>
   </div>

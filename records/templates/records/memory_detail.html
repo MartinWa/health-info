@@ -1,0 +1,72 @@
+{% extends "records/base.html" %}
+{% block content %}
+  <div class="page-head">
+    <h1>Memory entry</h1>
+    {% if entry.source != "owner" %}
+      <span class="badge">{% if entry.reported_by %}{{ entry.reported_by }}{% else %}{{ entry.source }}{% endif %}</span>
+    {% endif %}
+  </div>
+  <p class="statement">{{ entry.statement }}</p>
+  <dl class="detail">
+    <div><dt>Kind</dt><dd>{{ entry.get_kind_display }}</dd></div>
+    <div><dt>Subject</dt><dd>{{ entry.subject }}</dd></div>
+    <div><dt>Observed</dt><dd>{{ entry.observed_at|date:"j M Y H:i" }}</dd></div>
+    <div><dt>Recorded</dt><dd>{{ entry.recorded_at|date:"j M Y H:i" }}</dd></div>
+    <div><dt>Importance</dt><dd>{{ entry.importance }} of 5</dd></div>
+    <div><dt>Status</dt><dd>{{ entry.get_status_display }}</dd></div>
+    {% if entry.valid_until %}<div><dt>Valid until</dt><dd>{{ entry.valid_until|date:"j M Y H:i" }}</dd></div>{% endif %}
+    {% if entry.due_at %}<div><dt>Due</dt><dd>{{ entry.due_at|date:"j M Y H:i" }}</dd></div>{% endif %}
+    <div><dt>Tags</dt><dd>{{ tags|default:"—" }}</dd></div>
+    <div><dt>Pinned</dt><dd>{{ entry.pinned|yesno:"Yes,No" }}</dd></div>
+    <div><dt>Locked</dt><dd>{{ entry.locked|yesno:"Yes,No" }}</dd></div>
+    <div><dt>Where it came from</dt><dd>{{ entry.source }}{% if entry.source_ref %} · {{ entry.source_ref }}{% endif %}</dd></div>
+  </dl>
+
+  <div class="actions">
+    <a class="button" href="{% url 'records:memory_edit' entry.pk %}">Edit wording</a>
+    <a class="button" href="{% url 'records:memory_correct' entry.pk %}">Correct the claim</a>
+    <form method="post" action="{% url 'records:memory_pin' entry.pk %}" class="inline">
+      {% csrf_token %}
+      <button class="button quiet">{% if entry.pinned %}Unpin{% else %}Pin{% endif %}</button>
+    </form>
+    <form method="post" action="{% url 'records:memory_lock' entry.pk %}" class="inline">
+      {% csrf_token %}
+      <button class="button quiet">{% if entry.locked %}Unlock{% else %}Lock{% endif %}</button>
+    </form>
+    {% if entry.kind == "follow_up" and entry.status == "active" %}
+      <form method="post" action="{% url 'records:memory_done' entry.pk %}" class="inline">
+        {% csrf_token %}
+        <button class="button">Close follow-up</button>
+      </form>
+    {% endif %}
+    <a class="button danger" href="{% url 'records:memory_delete' entry.pk %}">Forget</a>
+  </div>
+
+  {% if ancestors %}
+    <section aria-labelledby="older-heading">
+      <h2 id="older-heading">Superseded claims</h2>
+      <ul class="plain">
+        {% for old in ancestors %}
+          <li>
+            <a href="{% url 'records:memory_detail' old.pk %}">{{ old.statement }}</a>
+            <span class="hint">{{ old.observed_at|date:"j M Y" }} · {{ old.get_status_display }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {% if corrections %}
+    <section aria-labelledby="newer-heading">
+      <h2 id="newer-heading">Corrected by</h2>
+      <ul class="plain">
+        {% for correction in corrections %}
+          <li>
+            <a href="{% url 'records:memory_detail' correction.pk %}">{{ correction.statement }}</a>
+            <span class="hint">{{ correction.observed_at|date:"j M Y" }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "records/base.html" %}
+{% block content %}
+  <h1>{{ title }}</h1>
+
+  <dl class="detail">
+    <div><dt>Account</dt><dd>{{ user.get_username }}</dd></div>
+    <div><dt>Name</dt><dd>{{ person.name|default:"—" }}</dd></div>
+    <div><dt>Time zone</dt><dd>{{ person.timezone|default:"Europe/Stockholm" }}</dd></div>
+    <div><dt>Units</dt><dd>{{ person.get_unit_system_display|default:"Metric" }}</dd></div>
+    <div><dt>Active tokens</dt><dd>{{ tokens }}</dd></div>
+    <div><dt>Version</dt><dd>{{ version }}</dd></div>
+  </dl>
+
+  <ul class="plain">
+    <li><a href="{% url 'records:person' %}">Person and time zone</a></li>
+    <li><a href="{% url 'records:environment' %}">Environment</a></li>
+    <li><a href="{% url 'password' %}">Change password</a></li>
+    <li><a href="{% url 'records:tokens' %}">API tokens</a></li>
+    <li><a href="{% url 'records:memory_review' %}">Review client writes</a></li>
+    <li><a href="{% url 'records:audit' %}">Audit</a></li>
+    {% if user.is_staff %}<li><a href="{% url 'admin:index' %}">Administration</a></li>{% endif %}
+  </ul>
+{% endblock %}

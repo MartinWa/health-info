@@ -1,0 +1,43 @@
+{% extends "records/base.html" %}
+{% block content %}
+  <h1>{{ title }}</h1>
+
+  <section aria-labelledby="unconfirmed-heading">
+    <h2 id="unconfirmed-heading">Client-written injuries and conditions</h2>
+    {% if rows %}
+      <ul class="plain">
+        {% for row in rows %}
+          <li class="strip">
+            <a href="{{ row.url }}">{{ row.text }}</a>
+            <span class="badge">{{ row.reported_by }}</span>
+            <form method="post" class="inline">
+              {% csrf_token %}
+              <input type="hidden" name="kind" value="{{ row.kind }}">
+              <input type="hidden" name="id" value="{{ row.id }}">
+              <button class="tap" name="action" value="confirm">Confirm</button>
+              <button class="tap" name="action" value="dismiss">Dismiss</button>
+            </form>
+            <a class="button quiet" href="{{ row.edit_url }}">Edit</a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">Nothing unconfirmed.</p>
+    {% endif %}
+  </section>
+
+  <section aria-labelledby="spot-heading">
+    <h2 id="spot-heading">Spot-check other client writes</h2>
+    {% if spot %}
+      <ul class="plain">
+        {% for row in spot %}
+          <li>{{ row.kind }}: <a href="{{ row.url }}">{{ row.text }}</a></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">No client-written rows yet.</p>
+    {% endif %}
+  </section>
+
+  <p><a class="button quiet" href="{% url 'records:memory_list' %}">Memory</a></p>
+{% endblock %}

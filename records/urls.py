@@ -26,6 +26,28 @@ urlpatterns = [
     path("quick/period", V.quick_period, name="quick_period"),
     path("timeline", V.timeline, name="timeline"),
     path("regimen", V.regimen, name="regimen"),
+    path("memory", V.memory_list, name="memory_list"),
+    path("memory/new", V.memory_new, name="memory_new"),
+    path("memory/review", V.memory_review, name="memory_review"),
+    path("memory/<int:pk>", V.memory_detail, name="memory_detail"),
+    path("memory/<int:pk>/edit", V.memory_edit, name="memory_edit"),
+    path("memory/<int:pk>/correct", V.memory_correct, name="memory_correct"),
+    path("memory/<int:pk>/delete", V.memory_delete, name="memory_delete"),
+    path("memory/<int:pk>/pin", V.memory_pin, name="memory_pin"),
+    path("memory/<int:pk>/lock", V.memory_lock, name="memory_lock"),
+    path("memory/<int:pk>/done", V.memory_done, name="memory_done"),
+    path("tokens", V.tokens, name="tokens"),
+    path("tokens/<int:pk>/revoke", V.token_revoke, name="token_revoke"),
+    path("settings", V.settings_page, name="settings"),
+    path("audit", V.audit_log, name="audit"),
+]
+
+urlpatterns += [
+    path(
+        "symptoms/<int:pk>/promote/<slug:target>",
+        V.promote_symptom,
+        name="promote_symptom",
+    ),
 ]
 
 for slug in (

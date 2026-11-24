@@ -6,7 +6,7 @@ Wearables; this service joins by date. The full plan is [planning/PLAN.md](plann
 
 ## What exists in this build
 
-Slice 1–3 of the plan's §11 build order:
+Slice 1–4 of the plan's §11 build order:
 
 - Accounts and context: person, environment, goals, programme, dashboard, domain state,
   audit events, per-account timezone.
@@ -14,9 +14,12 @@ Slice 1–3 of the plan's §11 build order:
   builder, practitioners, vaccinations, appointments.
 - Logs: measurements (blood pressure as a panel plus components), symptoms, check-ins, dose
   events, periods, notes, timeline, derived expected doses and adherence.
+- Memory: entries, corrections with the supersede chain, pin/lock, close follow-up,
+  `/memory/review` for client-written rows, promoting a symptom into an injury or condition,
+  API tokens, settings and audit.
 
-The JSON API (§5), memory (§4 of the UI), labs, import, backup/restore and export are not
-built yet. Where the plan says "API", the UI writes today's records only.
+The JSON API (§5), labs, import, backup/restore and export are not built yet. Where the plan
+says "API", the UI writes today's records only.
 
 ## Run it locally
 

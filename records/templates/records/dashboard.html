@@ -10,6 +10,22 @@
       <ul class="plain">
         {% for row in review_rows %}<li><a href="{{ row.url }}">{{ row.text }}</a></li>{% endfor %}
       </ul>
+      <p><a class="button quiet" href="{{ review_url }}">Open review</a></p>
+    </section>
+  {% endif %}
+
+  {% if follow_ups %}
+    <section class="strip" aria-labelledby="follow-ups-heading">
+      <h2 id="follow-ups-heading">Follow-ups</h2>
+      <ul class="plain">
+        {% for entry in follow_ups %}
+          <li>
+            <a href="{% url 'records:memory_detail' entry.pk %}">
+              {{ entry.due_at|date:"j M" }} · {{ entry.statement }}
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
     </section>
   {% endif %}
 
