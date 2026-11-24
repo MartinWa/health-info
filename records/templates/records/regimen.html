@@ -1,25 +1,35 @@
 {% extends "records/base.html" %}
 {% block content %}
   <div class="page-head">
-    <h1>Regimen</h1>
-    <a class="button" href="{% url 'records:medications_new' %}">Add course</a>
+    <div>
+      <span class="card-eyebrow">Medication</span>
+      <h1>Regimen</h1>
+    </div>
+    <div class="page-actions">
+      <a class="button" href="{% url 'records:medications_new' %}">Add course</a>
+    </div>
   </div>
   {% if rows %}
-    <table class="records">
-      <thead><tr><th scope="col">Substance</th><th scope="col">Schedule</th><th scope="col">Started</th><th scope="col">Stopped</th><th scope="col">Doses</th></tr></thead>
-      <tbody>
-        {% for row in rows %}
-          <tr>
-            <td data-label="Substance"><a href="{{ row.detail_url }}">{{ row.course.substance }}</a></td>
-            <td data-label="Schedule">{{ row.schedule }}</td>
-            <td data-label="Started">{{ row.course.started|date:"Y-m-d"|default:"—" }}</td>
-            <td data-label="Stopped">{{ row.course.stopped|date:"Y-m-d"|default:"ongoing" }}</td>
-            <td data-label="Doses">{{ row.doses }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table class="records">
+        <thead><tr><th scope="col">Substance</th><th scope="col">Schedule</th><th scope="col">Started</th><th scope="col">Stopped</th><th scope="col">Doses</th></tr></thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td data-label="Substance"><a href="{{ row.detail_url }}">{{ row.course.substance }}</a></td>
+              <td data-label="Schedule">{{ row.schedule }}</td>
+              <td data-label="Started">{{ row.course.started|date:"Y-m-d"|default:"—" }}</td>
+              <td data-label="Stopped">{{ row.course.stopped|date:"Y-m-d"|default:"ongoing" }}</td>
+              <td data-label="Doses">{{ row.doses }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   {% else %}
-    <p class="empty">No courses recorded.</p>
+    <div class="card">
+      <p class="empty">No courses recorded.</p>
+      <div class="actions"><a class="button" href="{% url 'records:medications_new' %}">Add the first course</a></div>
+    </div>
   {% endif %}
 {% endblock %}

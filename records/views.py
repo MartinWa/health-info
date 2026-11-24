@@ -34,11 +34,10 @@ from django.utils.dateparse import parse_datetime
 from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from records import forms as F
-from records import lockout
+from records import lockout, summary
 from records import models as M
 from records import registries as R
 from records import schedule as S
-from records.summary import domain_lines
 
 
 def see_other(url):
@@ -862,9 +861,14 @@ def dashboard(request):
             user=user, source="client", verification_status="unconfirmed"
         )
     ]
+    slots = S.planned_slots(user, today, today)
+    lines = summary.domain_lines(user)
+    profile = {"identity", "environment", "conditions", "allergies", "medications"}
     context = {
         "title": "Today",
-        "lines": domain_lines(user),
+        "lines": lines,
+        "profile_lines": [line for line in lines if line["domain"] in profile],
+        "other_lines": [line for line in lines if line["domain"] not in profile],
         "review_rows": [
             {"text": str(obj), "url": reverse(f"records:{kind}_detail", args=[obj.pk])}
             for obj, kind in review
@@ -872,14 +876,27 @@ def dashboard(request):
         "appointments": M.Appointment._default_manager.filter(
             user=user, at__gte=timezone.now(), status="planned"
         ).order_by("at")[:3],
-        "slots": S.planned_slots(user, today, today),
+        "slots": slots,
+        "dose_groups": summary.dose_groups(slots),
+        "all_taken": bool(slots) and all(slot["status"] == "taken" for slot in slots),
+        "vitals": summary.vitals(user),
+        "recent": summary.recent_activity(user),
+        "measurement_form": F.BloodPressureForm(user=user),
         "today": today,
+        "greeting": _greeting(),
         "review_url": reverse("records:memory_review"),
         "follow_ups": M.MemoryEntry._default_manager.filter(
             user=user, kind="follow_up", status="active", due_at__lte=timezone.now()
         ).order_by("due_at")[:5],
     }
     return render(request, "records/dashboard.html", context)
+
+
+def _greeting():
+    hour = timezone.localtime().hour
+    if hour < 12:
+        return "Good morning"
+    return "Good afternoon" if hour < 18 else "Good evening"
 
 
 def _singleton_form(request, form_class, instance, title, url_name, kind):
@@ -1007,7 +1024,18 @@ def quick(request):
 
 @login_required
 def quick_measurement(request):
-    return quick_form(request, F.BloodPressureForm, "Blood pressure", "records.Measurement")
+    form = F.BloodPressureForm(request.POST or None, user=request.user)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        audit(request.user, "create", "records.Measurement")
+        notify_warnings(request, form)
+        messages.success(request, "Reading saved.")
+        return see_other(reverse("records:dashboard"))
+    return render(
+        request,
+        "records/measurement.html",
+        {"form": form, "title": "Blood pressure"},
+    )
 
 
 @login_required
@@ -1096,62 +1124,11 @@ def regimen(request):
 
 @login_required
 def timeline(request):
-    user = request.user
-    items = []
-
-    def add(queryset, kind, text, url_name, when_field="at"):
-        for obj in queryset:
-            items.append(
-                {
-                    "at": getattr(obj, when_field),
-                    "kind": kind,
-                    "text": text(obj),
-                    "url": reverse(url_name, args=[obj.pk]) if url_name else None,
-                }
-            )
-
-    add(
-        M.Measurement._default_manager.filter(user=user, parent__isnull=True),
-        "Measurement",
-        lambda obj: f"{display(obj, 'metric')} {display(obj, 'value')} {obj.unit}".strip(),
-        "records:measurements_detail",
+    return render(
+        request,
+        "records/timeline.html",
+        {"title": "Timeline", "items": summary.recent_activity(request.user, limit=100)},
     )
-    add(
-        M.Symptom._default_manager.filter(user=user),
-        "Symptom",
-        lambda obj: obj.name,
-        "records:symptoms_detail",
-        "onset_at",
-    )
-    add(
-        M.Checkin._default_manager.filter(user=user),
-        "Check-in",
-        lambda obj: "Check-in",
-        "records:checkins_detail",
-    )
-    add(
-        M.Note._default_manager.filter(user=user),
-        "Note",
-        lambda obj: obj.body[:80],
-        "records:notes_detail",
-    )
-    add(
-        M.DoseEvent._default_manager.filter(user=user),
-        "Dose",
-        lambda obj: f"{obj.medication} {obj.status}",
-        None,
-    )
-    for period in M.Period._default_manager.filter(user=user):
-        items.append(
-            {
-                "at": timezone.make_aware(datetime.combine(period.start, datetime.min.time())),
-                "kind": "Period",
-                "text": f"{period.get_kind_display()} {period.start}",
-                "url": reverse("records:periods_detail", args=[period.pk]),
-            }
-        )
-    items.sort(key=lambda item: item["at"], reverse=True)
-    return render(request, "records/timeline.html", {"title": "Timeline", "items": items[:100]})
 
 
 # --- Memory, tokens, settings and audit -----------------------------------------------

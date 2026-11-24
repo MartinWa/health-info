@@ -1,93 +1,228 @@
 {% extends "records/base.html" %}
 {% block content %}
-  <h1>Today</h1>
-  <p class="subtitle">{{ today|date:"l j F Y" }}</p>
+  <div class="hero">
+    <div>
+      <span class="card-eyebrow">{{ today|date:"l j F Y" }}</span>
+      <h1>{{ greeting }}</h1>
+      <p class="subtitle">
+        {% if all_taken %}Everything logged for today.{% else %}Your medication, readings and profile in one place.{% endif %}
+      </p>
+    </div>
+    <div class="hero-actions">
+      <a class="button" href="{% url 'records:quick_measurement' %}" data-drawer-open="measure-drawer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Log measurement
+      </a>
+      <a class="button quiet" href="{% url 'records:quick' %}">Quick add</a>
+    </div>
+  </div>
 
-  {% if review_rows %}
-    <section class="strip" aria-labelledby="review-heading">
-      <h2 id="review-heading">Needs review</h2>
-      <p class="hint">Written by a client and not confirmed by you yet.</p>
-      <ul class="plain">
-        {% for row in review_rows %}<li><a href="{{ row.url }}">{{ row.text }}</a></li>{% endfor %}
-      </ul>
-      <p><a class="button quiet" href="{{ review_url }}">Open review</a></p>
-    </section>
-  {% endif %}
-
-  {% if follow_ups %}
-    <section class="strip" aria-labelledby="follow-ups-heading">
-      <h2 id="follow-ups-heading">Follow-ups</h2>
-      <ul class="plain">
+  {% if follow_ups or review_rows %}
+    <section class="card alert-card span-12" aria-labelledby="attention-heading">
+      <div class="card-head">
+        <div>
+          <span class="card-eyebrow">Attention</span>
+          <h2 id="attention-heading">Worth a look</h2>
+        </div>
+      </div>
+      <ul class="alert-list">
         {% for entry in follow_ups %}
-          <li>
-            <a href="{% url 'records:memory_detail' entry.pk %}">
-              {{ entry.due_at|date:"j M" }} · {{ entry.statement }}
-            </a>
-          </li>
+          <li><a href="{% url 'records:memory_detail' entry.pk %}">{{ entry.statement }}</a> <span class="hint">· due {{ entry.due_at|date:"j M" }}</span></li>
+        {% endfor %}
+        {% for row in review_rows %}
+          <li><a href="{{ row.url }}">{{ row.text }}</a> <span class="hint">· client-written, unconfirmed</span></li>
         {% endfor %}
       </ul>
+      <div class="actions">
+        {% if review_rows %}<a class="button quiet small" href="{{ review_url }}">Review client writes</a>{% endif %}
+      </div>
     </section>
   {% endif %}
 
-  <section class="strip" aria-labelledby="doses-heading">
-    <h2 id="doses-heading">Today's doses</h2>
-    {% if slots %}
-      <ul class="dose-list">
-        {% for slot in slots %}
-          <li>
-            <div class="dose-line">
-              <strong>{{ slot.substance }}</strong>
-              {% if slot.strength %}<span>{{ slot.strength }} {{ slot.unit }}</span>{% endif %}
-              <span class="muted">{{ slot.scheduled_for|time:"H:i" }}</span>
+  <div class="bento">
+    <section class="card span-7" aria-labelledby="meds-heading">
+      <div class="card-head">
+        <div>
+          <span class="card-eyebrow">Today</span>
+          <h2 id="meds-heading">Medication</h2>
+        </div>
+        <a class="card-link" href="{% url 'records:regimen' %}">Regimen</a>
+      </div>
+
+      {% if dose_groups %}
+        {% for group in dose_groups %}
+          <div class="dose-group">
+            <div class="dose-group-head">
+              <h3>{{ group.label }}</h3>
+              <span class="dose-count">{{ group.taken }} of {{ group.total }} taken</span>
             </div>
-            {% if slot.status %}
-              <span class="badge badge-ok">{{ slot.status|capfirst }}</span>
-            {% else %}
-              <form method="post" action="{% url 'records:quick_dose' %}" class="inline">
-                {% csrf_token %}
-                <input type="hidden" name="medication_id" value="{{ slot.medication_id }}">
-                <input type="hidden" name="scheduled_for" value="{{ slot.scheduled_for|date:'c' }}">
-                <button class="tap" name="status" value="taken">Taken</button>
-                <button class="tap" name="status" value="skipped">Skipped</button>
-              </form>
-            {% endif %}
+            <ul class="dose-list">
+              {% for slot in group.rows %}{% include "records/_dose_row.html" %}{% endfor %}
+            </ul>
+          </div>
+        {% endfor %}
+        {% if all_taken %}
+          <p class="all-done">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg>
+            All doses logged. Nothing else to do today.
+          </p>
+        {% endif %}
+      {% else %}
+        <p class="empty">Nothing scheduled today. Add a course in the regimen to see doses here.</p>
+      {% endif %}
+
+      <div class="actions">
+        <a class="button quiet small" href="{% url 'records:quick_dose' %}">Log another dose</a>
+      </div>
+    </section>
+
+    <section class="card span-5" aria-labelledby="vitals-heading">
+      <div class="card-head">
+        <div>
+          <span class="card-eyebrow">Latest</span>
+          <h2 id="vitals-heading">Vitals</h2>
+        </div>
+        <a class="card-link" href="{% url 'records:measurements_list' %}">History</a>
+      </div>
+
+      {% for vital in vitals %}
+        <div class="vital">
+          <div class="vital-top">
+            <span class="vital-label">{{ vital.label }}</span>
+            {% if vital.status %}<span class="pill pill-{{ vital.status }}">{{ vital.status_label }}</span>{% endif %}
+          </div>
+          <p class="reading">{{ vital.value }}<span class="unit">{{ vital.unit }}</span></p>
+          {% if vital.sparkline %}
+            <svg class="spark" viewBox="0 0 100 32" preserveAspectRatio="none" role="img" aria-label="Recent trend">
+              <polyline points="{{ vital.sparkline }}"/>
+            </svg>
+          {% else %}
+            <div class="spark-empty" aria-hidden="true"></div>
+          {% endif %}
+          <p class="vital-meta">
+            {% if vital.at %}{{ vital.at|date:"j M" }} at {{ vital.at|time:"H:i" }}{% else %}No reading yet{% endif %}
+          </p>
+        </div>
+      {% endfor %}
+
+      <div class="actions">
+        <a class="button quiet small" href="{% url 'records:quick_measurement' %}" data-drawer-open="measure-drawer">Log reading</a>
+      </div>
+    </section>
+
+    <section class="card span-7" aria-labelledby="recent-heading">
+      <div class="card-head">
+        <div>
+          <span class="card-eyebrow">History</span>
+          <h2 id="recent-heading">Recent activity</h2>
+        </div>
+        <a class="card-link" href="{% url 'records:timeline' %}">Timeline</a>
+      </div>
+      <ul class="activity-list">
+        {% for item in recent %}
+          <li class="activity-row">
+            <span class="activity-dot" data-kind="{{ item.kind|lower }}" aria-hidden="true"></span>
+            <span class="activity-body">
+              {% if item.url %}<a href="{{ item.url }}">{{ item.text }}</a>{% else %}<span>{{ item.text }}</span>{% endif %}
+              <span class="activity-kind">{{ item.kind }}</span>
+            </span>
+            <time class="activity-time" datetime="{{ item.at|date:'c' }}">{{ item.at|date:"j M H:i" }}</time>
           </li>
+        {% empty %}
+          <li class="empty">Nothing logged yet. Start with a blood pressure reading.</li>
         {% endfor %}
       </ul>
-    {% else %}
-      <p class="hint">Nothing expected today.</p>
-    {% endif %}
-    <p><a class="button" href="{% url 'records:quick_dose' %}">Log another dose</a></p>
-  </section>
+    </section>
 
-  {% if appointments %}
-    <section class="strip" aria-labelledby="appointments-heading">
-      <h2 id="appointments-heading">Upcoming appointments</h2>
-      <ul class="plain">
-        {% for appointment in appointments %}
+    <section class="card span-5" aria-labelledby="record-heading">
+      <div class="card-head">
+        <div>
+          <span class="card-eyebrow">Health profile</span>
+          <h2 id="record-heading">Your record</h2>
+        </div>
+        <a class="card-link" href="{% url 'records:person' %}">Edit</a>
+      </div>
+
+      <ul class="domain-list">
+        {% for line in profile_lines %}
           <li>
-            <a href="{% url 'records:appointments_detail' appointment.pk %}">
-              {{ appointment.at|date:"j M H:i" }} · {{ appointment.practitioner_name|default:appointment.place|default:"Appointment" }}
+            <a class="domain-link" href="{{ line.url }}">
+              <span class="domain-name">{{ line.label }}</span>
+              <span class="state state-{{ line.state }}">
+                {% if line.state == "unknown" %}Not recorded{% elif line.state == "none" %}None{% else %}On file{% endif %}
+              </span>
+              <span class="domain-summary">{{ line.summary }}</span>
+              <span class="domain-action">{{ line.action }}</span>
             </a>
           </li>
         {% endfor %}
       </ul>
-    </section>
-  {% endif %}
 
-  <section aria-labelledby="domains-heading">
-    <h2 id="domains-heading">Domains</h2>
-    <ul class="domain-lines">
-      {% for line in lines %}
-        <li>
-          <a class="domain-link" href="{{ line.url }}">
-            <span class="domain-name">{{ line.label }}</span>
-            <span class="state state-{{ line.state }}">{{ line.state }}</span>
-            <span class="domain-summary">{{ line.summary }}</span>
-            <span class="domain-action">{{ line.action }}</span>
-          </a>
-        </li>
-      {% endfor %}
-    </ul>
-  </section>
+      <details class="more-domains">
+        <summary>All {{ lines|length }} domains</summary>
+        <ul class="domain-list">
+          {% for line in other_lines %}
+            <li>
+              <a class="domain-link" href="{{ line.url }}">
+                <span class="domain-name">{{ line.label }}</span>
+                <span class="state state-{{ line.state }}">
+                  {% if line.state == "unknown" %}Not recorded{% elif line.state == "none" %}None{% else %}On file{% endif %}
+                </span>
+                <span class="domain-summary">{{ line.summary }}</span>
+                <span class="domain-action">{{ line.action }}</span>
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      </details>
+    </section>
+
+    {% if appointments %}
+      <section class="card span-12" aria-labelledby="appointments-heading">
+        <div class="card-head">
+          <div>
+            <span class="card-eyebrow">Coming up</span>
+            <h2 id="appointments-heading">Appointments</h2>
+          </div>
+          <a class="card-link" href="{% url 'records:appointments_list' %}">All</a>
+        </div>
+        <ul class="activity-list">
+          {% for appointment in appointments %}
+            <li class="activity-row">
+              <span class="activity-dot" data-kind="measurement" aria-hidden="true"></span>
+              <span class="activity-body">
+                <a href="{% url 'records:appointments_detail' appointment.pk %}">
+                  {{ appointment.practitioner_name|default:appointment.place|default:"Appointment" }}
+                </a>
+                <span class="activity-kind">Appointment</span>
+              </span>
+              <time class="activity-time" datetime="{{ appointment.at|date:'c' }}">{{ appointment.at|date:"j M H:i" }}</time>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+  </div>
+
+  <dialog class="drawer" id="measure-drawer" aria-labelledby="measure-title">
+    <form method="post" action="{% url 'records:quick_measurement' %}" class="drawer-form" data-dirty novalidate>
+      {% csrf_token %}
+      <div class="drawer-head">
+        <div>
+          <span class="card-eyebrow">Blood measurement</span>
+          <h2 id="measure-title">Log a reading</h2>
+        </div>
+        <button type="button" class="drawer-close" data-drawer-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <div class="drawer-body">
+        {% include "records/_measurement_form.html" with form=measurement_form %}
+      </div>
+      <div class="drawer-foot">
+        <button class="button" type="submit">Save reading</button>
+        <button class="button quiet" type="button" data-drawer-close>Cancel</button>
+      </div>
+    </form>
+  </dialog>
 {% endblock %}

@@ -1,20 +1,28 @@
 {% extends "records/base.html" %}
 {% block content %}
-  <h1>{{ title }}</h1>
-  <p>This deletes every health record in this account: person, environment, programme, goals,
-    conditions, injuries, allergies, medications and doses, vaccinations, labs, appointments,
-    periods, measurements, symptoms, check-ins, notes and memory. Tokens and the audit trail
-    stay.</p>
-  <p>There is no undo. Download an export first if you might want the data back.</p>
-  <form method="post" class="record-form">
-    {% csrf_token %}
-    <div class="field">
-      <label for="confirm">Type purge to confirm</label>
-      <input class="input" id="confirm" name="confirm" autocomplete="off" autocapitalize="none">
+  <div class="page-head">
+    <div>
+      <span class="card-eyebrow">Account</span>
+      <h1>{{ title }}</h1>
     </div>
-    <div class="actions">
-      <button class="button danger" type="submit">Delete all health data</button>
-      <a class="button quiet" href="{% url 'records:settings' %}">Cancel</a>
-    </div>
-  </form>
+  </div>
+
+  <div class="card" style="max-width: 640px">
+    <p>This deletes every health record in this account: person, environment, programme, goals,
+      conditions, injuries, allergies, medications and doses, vaccinations, labs, appointments,
+      periods, measurements, symptoms, check-ins, notes and memory. Tokens and the audit trail
+      stay.</p>
+    <p>There is no undo. Download an export first if you might want the data back.</p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="field">
+        <label for="confirm">Type purge to confirm</label>
+        <input class="input" id="confirm" name="confirm" autocomplete="off" autocapitalize="none">
+      </div>
+      <div class="actions">
+        <button class="button danger" type="submit">Delete all health data</button>
+        <a class="button quiet" href="{% url 'records:settings' %}">Cancel</a>
+      </div>
+    </form>
+  </div>
 {% endblock %}

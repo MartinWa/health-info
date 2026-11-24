@@ -4,57 +4,86 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#f8fafc">
     <title>{% block title %}{{ title|default:"Health info" }} · health-info{% endblock %}</title>
+    <link rel="preload" href="{% static 'records/fonts/inter-latin-var.woff2' %}" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="{% static 'records/app.css' %}">
     <script src="{% static 'records/app.js' %}" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
-      <a class="brand" href="{% url 'records:dashboard' %}">health-info</a>
-      {% if user.is_authenticated %}
-        <nav class="main-nav" aria-label="Main">
-          <a href="{% url 'records:dashboard' %}">Today</a>
-          <a href="{% url 'records:quick' %}">Quick add</a>
-          <a href="{% url 'records:timeline' %}">Timeline</a>
-          <a href="{% url 'records:memory_list' %}">Memory</a>
-          <a href="{% url 'records:regimen' %}">Regimen</a>
-          <a href="{% url 'records:labs_list' %}">Labs</a>
-          <a href="{% url 'records:search' %}">Search</a>
-        </nav>
-        <details class="user-menu">
-          <summary>{{ user.get_username }}</summary>
-          <div class="user-menu-panel">
-            <a href="{% url 'records:person' %}">Person</a>
-            <a href="{% url 'records:environment' %}">Environment</a>
-            <a href="{% url 'records:goals_list' %}">Goals</a>
-            <a href="{% url 'records:program' %}">Programme</a>
-            <a href="{% url 'records:conditions_list' %}">Conditions</a>
-            <a href="{% url 'records:injuries_list' %}">Injuries</a>
-            <a href="{% url 'records:allergies_list' %}">Allergies</a>
-            <a href="{% url 'records:medications_list' %}">Medications</a>
-            <a href="{% url 'records:vaccinations_list' %}">Vaccinations</a>
-            <a href="{% url 'records:practitioners_list' %}">Practitioners</a>
-            <a href="{% url 'records:appointments_list' %}">Appointments</a>
-            <a href="{% url 'records:labs_list' %}">Labs</a>
-            <a href="{% url 'records:measurements_list' %}">Measurements</a>
-            <a href="{% url 'records:symptoms_list' %}">Symptoms</a>
-            <a href="{% url 'records:checkins_list' %}">Check-ins</a>
-            <a href="{% url 'records:periods_list' %}">Periods</a>
-            <a href="{% url 'records:notes_list' %}">Notes</a>
-            <a href="{% url 'records:memory_list' %}">Memory</a>
-            <a href="{% url 'records:memory_review' %}">Review client writes</a>
-            <a href="{% url 'records:tokens' %}">Tokens</a>
-            <a href="{% url 'records:audit' %}">Audit</a>
-            <a href="{% url 'records:settings' %}">Settings</a>
-            <a href="{% url 'password' %}">Change password</a>
-            {% if user.is_staff %}<a href="{% url 'admin:index' %}">Administration</a>{% endif %}
-            <form method="post" action="{% url 'logout' %}">
-              {% csrf_token %}<button type="submit">Sign out</button>
-            </form>
+      <div class="header-inner">
+        <a class="brand" href="{% url 'records:dashboard' %}">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3.5l2-5 3.5 10 2.5-5H21"/></svg>
+          </span>
+          health-info
+        </a>
+        {% if user.is_authenticated %}
+          <nav class="main-nav" aria-label="Main">
+            <a href="{% url 'records:dashboard' %}"{% if request.resolver_match.url_name == "dashboard" %} aria-current="page"{% endif %}>Today</a>
+            <a href="{% url 'records:regimen' %}"{% if "medication" in request.resolver_match.url_name or request.resolver_match.url_name == "regimen" %} aria-current="page"{% endif %}>Medications</a>
+            <a href="{% url 'records:measurements_list' %}"{% if "measurement" in request.resolver_match.url_name %} aria-current="page"{% endif %}>Measurements</a>
+            <a href="{% url 'records:labs_list' %}"{% if "labs" in request.resolver_match.url_name %} aria-current="page"{% endif %}>Labs</a>
+            <a href="{% url 'records:timeline' %}"{% if request.resolver_match.url_name == "timeline" %} aria-current="page"{% endif %}>Timeline</a>
+          </nav>
+          <div class="header-actions">
+            <a class="button" href="{% url 'records:quick' %}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              <span>Log</span>
+            </a>
+            <details class="user-menu">
+              <summary aria-label="Account and more">
+                <span class="avatar" aria-hidden="true">{{ user.get_username|slice:":1" }}</span>
+                {{ user.get_username }}
+              </summary>
+              <div class="user-menu-panel">
+                <div class="menu-group">
+                  <h3>Health profile</h3>
+                  <a href="{% url 'records:person' %}">Person</a>
+                  <a href="{% url 'records:environment' %}">Environment</a>
+                  <a href="{% url 'records:goals_list' %}">Goals</a>
+                  <a href="{% url 'records:program' %}">Programme</a>
+                  <a href="{% url 'records:conditions_list' %}">Conditions</a>
+                  <a href="{% url 'records:injuries_list' %}">Injuries</a>
+                  <a href="{% url 'records:allergies_list' %}">Allergies</a>
+                  <a href="{% url 'records:vaccinations_list' %}">Vaccinations</a>
+                  <a href="{% url 'records:practitioners_list' %}">Practitioners</a>
+                </div>
+                <div class="menu-group">
+                  <h3>Record</h3>
+                  <a href="{% url 'records:medications_list' %}">Medication courses</a>
+                  <a href="{% url 'records:measurements_list' %}">Measurements</a>
+                  <a href="{% url 'records:symptoms_list' %}">Symptoms</a>
+                  <a href="{% url 'records:checkins_list' %}">Check-ins</a>
+                  <a href="{% url 'records:periods_list' %}">Periods</a>
+                  <a href="{% url 'records:notes_list' %}">Notes</a>
+                  <a href="{% url 'records:appointments_list' %}">Appointments</a>
+                  <a href="{% url 'records:labs_list' %}">Labs</a>
+                </div>
+                <div class="menu-group">
+                  <h3>Memory</h3>
+                  <a href="{% url 'records:memory_list' %}">Entries</a>
+                  <a href="{% url 'records:memory_review' %}">Review client writes</a>
+                </div>
+                <div class="menu-group">
+                  <h3>Data and account</h3>
+                  <a href="{% url 'records:search' %}">Search</a>
+                  <a href="{% url 'records:tokens' %}">API tokens</a>
+                  <a href="{% url 'records:settings' %}">Settings</a>
+                  <a href="{% url 'records:audit' %}">Audit</a>
+                  <a href="{% url 'password' %}">Change password</a>
+                  {% if user.is_staff %}<a href="{% url 'admin:index' %}">Administration</a>{% endif %}
+                </div>
+                <form method="post" action="{% url 'logout' %}" class="menu-signout">
+                  {% csrf_token %}<button type="submit">Sign out</button>
+                </form>
+              </div>
+            </details>
           </div>
-        </details>
-      {% endif %}
+        {% endif %}
+      </div>
     </header>
     <main id="main" tabindex="-1">
       {% for message in messages %}
