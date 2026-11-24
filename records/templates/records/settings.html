@@ -18,6 +18,10 @@
     <li><a href="{% url 'records:tokens' %}">API tokens</a></li>
     <li><a href="{% url 'records:memory_review' %}">Review client writes</a></li>
     <li><a href="{% url 'records:audit' %}">Audit</a></li>
+    <li><a href="{% url 'records:search' %}">Search records</a></li>
+    <li><a href="{% url 'records:export' %}">Export all data (zip)</a></li>
+    <li><a href="{% url 'records:llms' %}">llms.txt (API guide for a model)</a></li>
+    <li><a href="{% url 'records:purge' %}">Delete all health data</a></li>
     {% if user.is_staff %}<li><a href="{% url 'admin:index' %}">Administration</a></li>{% endif %}
   </ul>
 {% endblock %}

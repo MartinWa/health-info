@@ -40,6 +40,15 @@ urlpatterns = [
     path("tokens/<int:pk>/revoke", V.token_revoke, name="token_revoke"),
     path("settings", V.settings_page, name="settings"),
     path("audit", V.audit_log, name="audit"),
+    path("labs", V.labs_list, name="labs_list"),
+    path("labs/new", V.labs_new, name="labs_new"),
+    path("labs/<int:pk>", V.labs_detail, name="labs_detail"),
+    path("labs/<int:pk>/edit", V.LabEdit, name="labs_edit"),
+    path("labs/<int:pk>/delete", V.LabDelete, name="labs_delete"),
+    path("export", V.export_data, name="export"),
+    path("purge", V.purge, name="purge"),
+    path("search", V.search, name="search"),
+    path("llms.txt", V.llms_txt, name="llms"),
 ]
 
 urlpatterns += [

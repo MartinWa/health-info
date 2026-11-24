@@ -438,6 +438,63 @@ class PeriodForm(OwnerForm):
         fields = ["kind", "start", "end", "note"]
 
 
+class LabForm(OwnerForm):
+    """One analyte row, for editing a saved result."""
+
+    class Meta:
+        model = M.Lab
+        fields = [
+            "panel",
+            "analyte",
+            "value",
+            "value_text",
+            "unit",
+            "ref_low",
+            "ref_high",
+            "fasting",
+            "collected_at",
+            "lab_name",
+        ]
+        # The panel is every row sharing a name and a collection time, so editing the time
+        # moves this row out of its panel.
+        help_texts = {"collected_at": "The panel is the rows with this name and collection time."}
+
+
+class LabPanelForm(forms.Form):
+    """Panel-level fields of a new panel; the analyte rows come from a formset."""
+
+    panel = forms.CharField(max_length=100)
+    collected_at = LocalDateTimeField(label="Collected at")
+    lab_name = forms.CharField(max_length=200, required=False, label="Lab")
+    fasting = forms.NullBooleanField(required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "input")
+        if not self.is_bound:
+            self.initial.setdefault(
+                "collected_at", timezone.localtime().replace(second=0, microsecond=0)
+            )
+        self.fields["collected_at"].widget = LocalDateTimeInput(attrs={"class": "input"})
+
+
+class LabAnalyteForm(forms.ModelForm):
+    """One analyte row; the view supplies owner, panel and collected_at."""
+
+    class Meta:
+        model = M.Lab
+        fields = ["analyte", "value", "value_text", "unit", "ref_low", "ref_high"]
+        labels = {"value_text": "Value (text)"}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "input")
+            if isinstance(field, forms.DecimalField):
+                field.widget.attrs.setdefault("inputmode", "decimal")
+
+
 class MeasurementForm(OwnerForm):
     """One metric per row; blood pressure has its own paired form."""
 

@@ -21,11 +21,12 @@ Slices 1–5 of the plan's §10 build order:
   owner-scoped ids (`404`, never `403`), the write rules of §5, `/summary`,
   `/expected-doses`, `/adherence`, `/health`, and `/docs` plus `/openapi.json` (session or
   bearer). The contract is committed at `docs/api/openapi.json`; regenerate it with
-  `uv run python tools/dump_openapi.py`. The `Lab` model and `GET /labs` exist; no lab screen
-  is built yet.
+  `uv run python tools/dump_openapi.py`.
+- Labs: `/labs` lists panels, `/labs/new` adds one panel's analytes in a single form and
+  pre-fills analytes, units and reference bounds from the last panel with the same name.
+- Polish: `/export` (zip of the account's JSON), `/purge`, `/search` and `/llms.txt`.
 
-The labs UI (§6), backup/restore (§8) and export, purge, search and `/llms.txt` (§6 slice 6)
-are not built yet.
+Backup and restore (§8) are not built yet.
 
 ## Run it locally
 
