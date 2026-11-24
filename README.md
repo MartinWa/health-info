@@ -66,6 +66,14 @@ pulling a published one.
 image target, needs no `.env`, serves on `127.0.0.1:8000` only, and keeps all state —
 database, virtualenv, caches — on named volumes while the working copy is bound into the
 container. Rebuild after a dependency change so the seeded virtualenv is refreshed.
+`HEALTH_INFO_DEV_PORT` moves the published host port, for a host that already uses 8000:
+
+```sh
+HEALTH_INFO_DEV_PORT=8020 docker compose -f compose.development.yaml up --build
+```
+
+The first account is `docker compose -f compose.development.yaml exec web python manage.py
+createsuperuser`.
 
 ```sh
 docker compose -f compose.development.yaml up --build
