@@ -1,0 +1,5 @@
+# Adds the backup directory to the read-only base container; /data comes from compose.yaml.
+services:
+  app:
+    volumes:
+      - "${APP_BACKUP_PATH:?Set a private host path outside APP_DATA_PATH}:/backups"

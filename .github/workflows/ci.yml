@@ -84,6 +84,7 @@ jobs:
           docker compose -f compose.yaml -f compose.host-port.yaml config -q
           PROXY_NETWORK=proxy docker compose -f compose.yaml -f compose.proxy-network.yaml config -q
           docker compose -f compose.yaml -f compose.local-build.yaml config -q
+          docker compose -f compose.yaml -f compose.backup.yaml config -q
           docker compose config -q
           docker compose -f compose.development.yaml config -q
       - name: Stop development containers
