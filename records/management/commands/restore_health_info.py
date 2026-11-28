@@ -82,6 +82,14 @@ def compare_counts(recorded, restored):
         raise backup.BackupError("row counts differ: " + "; ".join(differing))
 
 
+def release(destination, created, lock):
+    """Let go of the claim without touching what is in it: a refusal deletes nothing."""
+    lock.unlink(missing_ok=True)
+    if created:
+        with contextlib.suppress(OSError):
+            destination.rmdir()
+
+
 def discard(destination, created, lock):
     """Delete what this run wrote, releasing the lock last so no rival can start mid-cleanup."""
     for suffix in ("", "-wal", "-shm"):
@@ -125,9 +133,10 @@ class Command(BaseCommand):
             lock = reserve(destination, created)
         except backup.BackupError as exc:
             raise CommandError(f"Refusing {destination}: {exc}") from exc
-        # The claim decides: content that arrived after the check above is not written over.
+        # The claim decides: content that arrived after the check above is not written over,
+        # and it is not this run's to delete - a faster restore may have just finished.
         if contents(destination):
-            discard(destination, created, lock)
+            release(destination, created, lock)
             raise CommandError(f"Refusing {destination}: it holds files. Restore into a new one.")
         try:
             # Only the database: the destination is mounted at /data, where a manifest is not read.

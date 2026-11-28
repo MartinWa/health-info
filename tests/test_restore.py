@@ -217,22 +217,23 @@ def test_warns_when_the_backup_came_from_another_build(tmp_path, source):
 
 
 def test_content_that_appears_after_the_early_check_is_refused(tmp_path, source, monkeypatch):
-    """The claim decides: a rival that lands a file first is not overwritten."""
+    """The claim decides: a rival that lands a database first keeps it."""
     destination = tmp_path / "restored"
     destination.mkdir()
     real_reserve = restore_command.reserve
 
     def racing_reserve(target, created):
-        (target / "intruder.txt").write_text("mine", encoding="utf-8")
+        (target / backup.DATABASE_FILE).write_text("the other run's copy", encoding="utf-8")
         return real_reserve(target, created)
 
     monkeypatch.setattr(restore_command, "reserve", racing_reserve)
 
     with pytest.raises(CommandError, match="holds files"):
         call_command("restore_health_info", str(source), str(destination))
-    assert [entry.name for entry in destination.iterdir()] == ["intruder.txt"]
-    assert (destination / "intruder.txt").read_text(encoding="utf-8") == "mine"
-    assert not (destination / backup.DATABASE_FILE).exists()
+    assert [entry.name for entry in destination.iterdir()] == [backup.DATABASE_FILE]
+    assert (destination / backup.DATABASE_FILE).read_text(encoding="utf-8") == (
+        "the other run's copy"
+    )
 
 
 class RecordingLock:

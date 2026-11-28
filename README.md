@@ -48,13 +48,13 @@ docker compose -f compose.yaml -f compose.backup.yaml -f compose.restore.yaml ru
 ```
 
 Then boot that copy on the spare port under its own project, so the drill gets its own
-container and can neither recreate nor detach the live app. The shell needs the paths that
-only `.env` holds, and the override keeps this run off the live data directory:
+container and can neither recreate nor detach the live app. `APP_DATA_PATH` is spelled out in
+full rather than read from `.env`: Compose parses that file itself, so the shell cannot expand
+a value from it, and the override keeps this run off the live data directory:
 
 ```sh
-set -a; . ./.env; set +a
-APP_DATA_PATH="$APP_RESTORE_PATH/check-1" docker compose -p health-info-restore \
-  -f compose.yaml -f compose.restore.yaml up -d
+APP_DATA_PATH="/volume1/docker/health-info/restores/check-1" \
+  docker compose -p health-info-restore -f compose.yaml -f compose.restore.yaml up -d
 ```
 
 Stop the drill first — `docker compose -p health-info-restore down` — so that only one
