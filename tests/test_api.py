@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from django.db import connection
 from django.http import HttpResponse
 from django.test import Client, RequestFactory
 from django.utils import timezone
@@ -720,3 +721,32 @@ def test_an_explicit_null_for_a_non_nullable_field_is_422(api):
     assert body(response)["error"]["details"][0]["path"] == "tags"
     response = patch(api, f"/api/v1/notes/{note['id']}", {"at": None})
     assert response.status_code == 422
+
+
+def test_a_patch_builds_its_answer_before_it_releases_the_row(api, user, monkeypatch):
+    """A components list read after the commit can describe a newer version of the row.
+
+    The write is protected by the transaction, so the payload has to be built in there too -
+    otherwise a conversion landing in the gap returns a panel that owns no numbers.
+    """
+    created_panel = body(
+        post(
+            api,
+            "/api/v1/measurements",
+            {"metric": "blood_pressure", "components": {"systolic": 128, "diastolic": 82}},
+        )
+    )
+    # A test already runs inside a transaction, so the view's own block shows up as one more
+    # savepoint rather than as in_atomic_block turning true.
+    depth = len(connection.savepoint_ids)
+    seen = []
+    render = A.render
+
+    def watched(schema, obj, warnings=(), with_envelope=True):
+        seen.append(len(connection.savepoint_ids))
+        return render(schema, obj, warnings, with_envelope)
+
+    monkeypatch.setattr(A, "render", watched)
+    response = patch(api, f"/api/v1/measurements/{created_panel['id']}", {"note": "from a client"})
+    assert response.status_code == 200
+    assert seen == [depth + 1]

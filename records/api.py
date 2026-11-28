@@ -1577,8 +1577,11 @@ def update_measurement(request, id: int, payload: MeasurementPatch):
             for field, value in data.items():
                 setattr(obj, field, value)
             commit(obj)
+        # The answer is built here too: a components list read after the commit can already
+        # describe a newer version of the row than the one this response reports.
+        answer = render(MeasurementOut, obj, warnings)
     audit(request, "update", "records.Measurement", obj.pk)
-    return render(MeasurementOut, obj, warnings)
+    return answer
 
 
 @api.delete("/measurements/{id}", response={204: None}, tags=["measurements"])
