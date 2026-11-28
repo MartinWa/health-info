@@ -83,10 +83,10 @@ def compare_counts(recorded, restored):
 
 
 def discard(destination, created, lock):
-    """Remove only what this run wrote; a directory this run did not create is never removed."""
-    lock.unlink(missing_ok=True)
+    """Delete what this run wrote, releasing the lock last so no rival can start mid-cleanup."""
     for suffix in ("", "-wal", "-shm"):
         (destination / (backup.DATABASE_FILE + suffix)).unlink(missing_ok=True)
+    lock.unlink(missing_ok=True)
     if created:
         with contextlib.suppress(OSError):
             destination.rmdir()
@@ -125,6 +125,10 @@ class Command(BaseCommand):
             lock = reserve(destination, created)
         except backup.BackupError as exc:
             raise CommandError(f"Refusing {destination}: {exc}") from exc
+        # The claim decides: content that arrived after the check above is not written over.
+        if contents(destination):
+            discard(destination, created, lock)
+            raise CommandError(f"Refusing {destination}: it holds files. Restore into a new one.")
         try:
             # Only the database: the destination is mounted at /data, where a manifest is not read.
             shutil.copy2(source / backup.DATABASE_FILE, database)

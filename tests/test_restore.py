@@ -14,7 +14,7 @@ from django.db.migrations.loader import MigrationLoader
 from django.test.utils import setup_databases, teardown_databases
 
 from records import backup
-from records.management.commands.restore_health_info import LOCK_FILE
+from records.management.commands import restore_health_info as restore_command
 
 
 @pytest.fixture
@@ -58,7 +58,7 @@ def test_a_backup_restores_into_a_new_directory(tmp_path, source):
 
     assert (destination / backup.DATABASE_FILE).is_file()
     assert not (destination / backup.MANIFEST_FILE).exists()
-    assert not (destination / LOCK_FILE).exists()
+    assert not (destination / restore_command.LOCK_FILE).exists()
     assert backup.counts(destination / backup.DATABASE_FILE) == backup.verify(source)["counts"]
     assert output.getvalue().endswith("no pending migrations\n")
 
@@ -93,11 +93,11 @@ def test_refuses_a_destination_that_holds_files_and_leaves_them_alone(tmp_path, 
 def test_refuses_a_destination_that_another_restore_holds(tmp_path, source):
     destination = tmp_path / "restored"
     destination.mkdir()
-    (destination / LOCK_FILE).write_text("", encoding="utf-8")
+    (destination / restore_command.LOCK_FILE).write_text("", encoding="utf-8")
 
     with pytest.raises(CommandError, match="another restore holds its lock file"):
         call_command("restore_health_info", str(source), str(destination))
-    assert [entry.name for entry in destination.iterdir()] == [LOCK_FILE]
+    assert [entry.name for entry in destination.iterdir()] == [restore_command.LOCK_FILE]
 
 
 def test_a_failure_in_an_existing_empty_directory_leaves_it_empty(tmp_path, source):
@@ -214,3 +214,45 @@ def test_warns_when_the_backup_came_from_another_build(tmp_path, source):
     call_command("restore_health_info", str(source), str(destination), stderr=errors)
 
     assert errors.getvalue().startswith("Warning: the backup was written by 0.6.0")
+
+
+def test_content_that_appears_after_the_early_check_is_refused(tmp_path, source, monkeypatch):
+    """The claim decides: a rival that lands a file first is not overwritten."""
+    destination = tmp_path / "restored"
+    destination.mkdir()
+    real_reserve = restore_command.reserve
+
+    def racing_reserve(target, created):
+        (target / "intruder.txt").write_text("mine", encoding="utf-8")
+        return real_reserve(target, created)
+
+    monkeypatch.setattr(restore_command, "reserve", racing_reserve)
+
+    with pytest.raises(CommandError, match="holds files"):
+        call_command("restore_health_info", str(source), str(destination))
+    assert [entry.name for entry in destination.iterdir()] == ["intruder.txt"]
+    assert (destination / "intruder.txt").read_text(encoding="utf-8") == "mine"
+    assert not (destination / backup.DATABASE_FILE).exists()
+
+
+class RecordingLock:
+    """A lock that records what is still in the directory at the moment it is released."""
+
+    def __init__(self, destination):
+        self.destination = destination
+        self.remaining = None
+
+    def unlink(self, **kwargs):
+        self.remaining = sorted(entry.name for entry in self.destination.iterdir())
+
+
+def test_the_lock_is_released_last(tmp_path):
+    destination = tmp_path / "restored"
+    destination.mkdir()
+    (destination / backup.DATABASE_FILE).write_text("copy", encoding="utf-8")
+    lock = RecordingLock(destination)
+
+    restore_command.discard(destination, created=False, lock=lock)
+
+    assert backup.DATABASE_FILE not in lock.remaining
+    assert destination.is_dir()
