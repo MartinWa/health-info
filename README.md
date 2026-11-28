@@ -38,16 +38,26 @@ docker compose -f compose.yaml -f compose.backup.yaml run --rm app \
 
 `restore_health_info <backup> <destination>` re-checks a backup and writes
 `<destination>/db.sqlite3`; it never edits a live file. `<destination>` is a host path under
-`${APP_RESTORE_PATH}`, which `compose.restore.yaml` mounts at `/restores`. Check the copy on
-the spare port with both overlays — `/backups` comes from `compose.backup.yaml`, not from the
-restore one — and with migrations off, so the run asserts the schema instead of migrating it:
+`${APP_RESTORE_PATH}`, which `compose.restore.yaml` mounts at `/restores`. First write the
+copy with a one-shot container — `/backups` comes from `compose.backup.yaml`, not from the
+restore one:
 
 ```sh
-APP_DATA_PATH="$APP_RESTORE_PATH/check-1" HEALTH_INFO_MIGRATE_ON_START=false \
-  docker compose -f compose.yaml -f compose.backup.yaml -f compose.restore.yaml up -d
+docker compose -f compose.yaml -f compose.backup.yaml -f compose.restore.yaml run --rm app \
+  python manage.py restore_health_info /backups/2026-11-24T0310 /restores/check-1
 ```
 
-Point `APP_DATA_PATH` at that directory only once it has answered on `127.0.0.1:8001`.
+Then boot that copy on the spare port under its own project, so the drill gets its own
+container and can neither recreate nor detach the live app:
+
+```sh
+APP_DATA_PATH="$APP_RESTORE_PATH/check-1" docker compose -p health-info-restore \
+  -f compose.yaml -f compose.restore.yaml up -d
+```
+
+Stop the drill first — `docker compose -p health-info-restore down` — so that only one
+container ever has `/data`. Point `APP_DATA_PATH` at that directory only once it has answered
+on `127.0.0.1:8001`.
 
 ## Run it locally
 

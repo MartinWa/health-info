@@ -14,6 +14,7 @@ from django.db.migrations.loader import MigrationLoader
 from django.test.utils import setup_databases, teardown_databases
 
 from records import backup
+from records.management.commands.restore_health_info import LOCK_FILE
 
 
 @pytest.fixture
@@ -57,6 +58,7 @@ def test_a_backup_restores_into_a_new_directory(tmp_path, source):
 
     assert (destination / backup.DATABASE_FILE).is_file()
     assert not (destination / backup.MANIFEST_FILE).exists()
+    assert not (destination / LOCK_FILE).exists()
     assert backup.counts(destination / backup.DATABASE_FILE) == backup.verify(source)["counts"]
     assert output.getvalue().endswith("no pending migrations\n")
 
@@ -86,6 +88,69 @@ def test_refuses_a_destination_that_holds_files_and_leaves_them_alone(tmp_path, 
     with pytest.raises(CommandError, match="holds files"):
         call_command("restore_health_info", str(source), str(destination))
     assert [entry.name for entry in destination.iterdir()] == ["keep.txt"]
+
+
+def test_refuses_a_destination_that_another_restore_holds(tmp_path, source):
+    destination = tmp_path / "restored"
+    destination.mkdir()
+    (destination / LOCK_FILE).write_text("", encoding="utf-8")
+
+    with pytest.raises(CommandError, match="another restore holds its lock file"):
+        call_command("restore_health_info", str(source), str(destination))
+    assert [entry.name for entry in destination.iterdir()] == [LOCK_FILE]
+
+
+def test_a_failure_in_an_existing_empty_directory_leaves_it_empty(tmp_path, source):
+    notes = backup.counts(source / backup.DATABASE_FILE)["records.Note"]
+    manifest = json.loads((source / backup.MANIFEST_FILE).read_text(encoding="utf-8"))
+    manifest["counts"]["records.Note"] = notes + 1
+    (source / backup.MANIFEST_FILE).write_text(json.dumps(manifest), encoding="utf-8")
+    destination = tmp_path / "restored"
+    destination.mkdir()
+
+    with pytest.raises(CommandError, match="row counts differ"):
+        call_command("restore_health_info", str(source), str(destination))
+    assert destination.is_dir()
+    assert list(destination.iterdir()) == []
+
+
+def test_refuses_a_manifest_without_an_app_version(tmp_path, source):
+    manifest = json.loads((source / backup.MANIFEST_FILE).read_text(encoding="utf-8"))
+    del manifest["app_version"]
+    (source / backup.MANIFEST_FILE).write_text(json.dumps(manifest), encoding="utf-8")
+    destination = tmp_path / "restored"
+
+    with pytest.raises(CommandError, match="no app_version"):
+        call_command("restore_health_info", str(source), str(destination))
+    assert not destination.exists()
+
+
+def test_refuses_a_copy_that_is_not_the_bytes_the_manifest_describes(tmp_path, source, monkeypatch):
+    """A source swapped between the hash and the copy is caught by hashing the copy."""
+    swapped = backup.verify(source)
+    swapped["database"]["sha256"] = "0" * 64
+    monkeypatch.setattr(backup, "verify", lambda directory: swapped)
+    destination = tmp_path / "restored"
+
+    with pytest.raises(CommandError, match="not the copy the manifest describes"):
+        call_command("restore_health_info", str(source), str(destination))
+    assert not destination.exists()
+
+
+def test_refuses_a_copy_carrying_a_migration_this_build_does_not_know(tmp_path, source):
+    database = source / backup.DATABASE_FILE
+    with contextlib.closing(sqlite3.connect(database)) as copy:
+        copy.execute(
+            "insert into django_migrations (app, name, applied) values (?, ?, datetime('now'))",
+            ["records", "9999_from_a_newer_build"],
+        )
+        copy.commit()
+    rewrite_manifest(source)
+    destination = tmp_path / "restored"
+
+    with pytest.raises(CommandError, match="records.9999_from_a_newer_build"):
+        call_command("restore_health_info", str(source), str(destination))
+    assert not destination.exists()
 
 
 def test_refuses_a_destination_that_is_a_file_and_leaves_it_alone(tmp_path, source):
