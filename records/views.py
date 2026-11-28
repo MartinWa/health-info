@@ -237,6 +237,12 @@ class RecordUpdate(LoginRequiredMixin, OwnedMixin, UpdateView):
     def get_success_url(self):
         return reverse(self.success_url_name, args=[self.object.pk])
 
+    def post(self, request, *args, **kwargs):
+        # The row this form read and the row it writes back share one transaction, so a
+        # client writing the same record cannot land in between and be overwritten by it.
+        with transaction.atomic():
+            return super().post(request, *args, **kwargs)
+
     def form_valid(self, form):
         self.object = form.save()
         audit(self.request.user, "update", self.object._meta.label, self.object.pk)

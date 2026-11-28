@@ -1544,32 +1544,39 @@ def get_measurement(request, id: int):
 
 @api.patch("/measurements/{id}", response=MeasurementItem, tags=["measurements"])
 def update_measurement(request, id: int, payload: MeasurementPatch):
-    obj = fetch(
-        M.Measurement,
-        request,
-        id,
-        queryset=M.Measurement._default_manager.filter(user=user_of(request), parent__isnull=True),
-    )
-    data = payload.model_dump(exclude_unset=True)
-    if obj.metric == "blood_pressure":
-        for field in data:
-            if field not in ("at", "note"):
-                raise invalid_field(field, "A blood pressure panel carries only its components.")
-        for field, value in data.items():
-            setattr(obj, field, value)
-        validate_fields(obj)
-        with transaction.atomic():
+    # The row is read inside the transaction that writes it back: a full-row save of a row
+    # read outside would restore the metric an edit made meanwhile had already changed, and
+    # leave a panel with no numbers. IMMEDIATE mode holds the writer lock from BEGIN, so the
+    # read cannot go stale between here and the save.
+    with transaction.atomic():
+        obj = fetch(
+            M.Measurement,
+            request,
+            id,
+            queryset=M.Measurement._default_manager.filter(
+                user=user_of(request), parent__isnull=True
+            ),
+        )
+        data = payload.model_dump(exclude_unset=True)
+        warnings = ()
+        if obj.metric == "blood_pressure":
+            for field in data:
+                if field not in ("at", "note"):
+                    raise invalid_field(
+                        field, "A blood pressure panel carries only its components."
+                    )
+            for field, value in data.items():
+                setattr(obj, field, value)
+            validate_fields(obj)
             obj.save()
             if "at" in data:
                 obj.components.update(at=obj.at)
-        audit(request, "update", "records.Measurement", obj.pk)
-        return render(MeasurementOut, obj)
-    warnings = ()
-    if data.get("value") is not None:
-        warnings = warnings_for(R.resolve_metric(obj.metric), data["value"], "value")
-    for field, value in data.items():
-        setattr(obj, field, value)
-    commit(obj)
+        else:
+            if data.get("value") is not None:
+                warnings = warnings_for(R.resolve_metric(obj.metric), data["value"], "value")
+            for field, value in data.items():
+                setattr(obj, field, value)
+            commit(obj)
     audit(request, "update", "records.Measurement", obj.pk)
     return render(MeasurementOut, obj, warnings)
 
