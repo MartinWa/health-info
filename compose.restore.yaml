@@ -1,0 +1,8 @@
+# Adds the restore directory and a spare loopback port to the base container; /data comes
+# from compose.yaml, so a restored copy is checked here before APP_DATA_PATH points at it.
+services:
+  app:
+    volumes:
+      - "${APP_RESTORE_PATH:?Set a private host path outside APP_DATA_PATH}:/restores"
+    ports:
+      - "127.0.0.1:8001:8000"
