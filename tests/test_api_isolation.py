@@ -1,20 +1,16 @@
-"""API isolation, parameterised from the committed schema so a new route cannot be missed."""
+"""API isolation, parameterised from the schema the app generates so no route can be missed."""
 
 import json
 from datetime import date
-from pathlib import Path
 
 import pytest
 from django.test import Client
 from django.utils import timezone
 
 from records import models as M
+from records.api import api
 
-SCHEMA = json.loads(
-    (Path(__file__).resolve().parent.parent / "docs" / "api" / "openapi.json").read_text(
-        encoding="utf-8"
-    )
-)
+SCHEMA = api.get_openapi_schema()
 
 SENTINEL = "sentinel"
 
@@ -98,6 +94,7 @@ def factories():
 FACTORIES = factories()
 
 ITEM_PATHS = {path: set(operations) for path, operations in SCHEMA["paths"].items() if "{" in path}
+SENT_VERBS = {"get", "patch", "delete"}
 
 DERIVED = {"/api/v1/expected-doses", "/api/v1/adherence"}
 SINGLETONS = {"/api/v1/person", "/api/v1/environment", "/api/v1/summary", "/api/v1/health"}
@@ -115,6 +112,11 @@ def test_every_item_route_has_an_isolation_case():
 
 def test_every_collection_has_a_seed():
     assert COLLECTIONS == set(FACTORIES) | DERIVED
+
+
+def test_every_item_verb_is_one_this_file_sends():
+    # A verb this file does not send is otherwise exercised as a DELETE, and would pass.
+    assert set().union(*ITEM_PATHS.values()) <= SENT_VERBS
 
 
 @pytest.mark.parametrize("path", sorted(ITEM_PATHS))

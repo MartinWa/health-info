@@ -76,6 +76,10 @@ jobs:
           docker compose -f compose.development.yaml exec -T web python manage.py migrate --check
       - name: Run application tests
         run: docker compose -f compose.development.yaml run --rm web pytest -q
+      - name: Run the restore tests on their own
+        # The suite always collects a database test, so only a file-scoped run reaches the
+        # fixture branch that builds the database itself.
+        run: docker compose -f compose.development.yaml run --rm web pytest -q tests/test_restore.py
       - name: Validate compose files
         run: |
           docker compose -f compose.development.yaml config -q
@@ -85,6 +89,7 @@ jobs:
           PROXY_NETWORK=proxy docker compose -f compose.yaml -f compose.proxy-network.yaml config -q
           docker compose -f compose.yaml -f compose.local-build.yaml config -q
           docker compose -f compose.yaml -f compose.backup.yaml config -q
+          docker compose -f compose.yaml -f compose.restore.yaml config -q
           docker compose config -q
           docker compose -f compose.development.yaml config -q
       - name: Stop development containers

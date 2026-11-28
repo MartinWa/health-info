@@ -1,0 +1,17 @@
+# Adds the restore directory, a spare loopback port and its own project network to the base
+# container; /data comes from compose.yaml, so a restored copy is checked here before
+# APP_DATA_PATH points at it.
+services:
+  app:
+    environment:
+      # The copy under /data is asserted at startup, never migrated into shape.
+      HEALTH_INFO_MIGRATE_ON_START: "false"
+    volumes:
+      - "${APP_RESTORE_PATH:?Set a private host path outside APP_DATA_PATH}:/restores"
+    ports:
+      - "127.0.0.1:8001:8000"
+
+# Never the live network: a drill that forgets its project name still cannot reach the stack.
+networks:
+  default:
+    name: "${HEALTH_INFO_RESTORE_NETWORK:-health-info-restore}"

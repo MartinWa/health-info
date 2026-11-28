@@ -6,7 +6,7 @@ Wearables; this service joins by date. The full plan is [planning/PLAN.md](plann
 
 ## What exists in this build
 
-Slices 1–5 of the plan's §10 build order:
+All six slices of the plan's §10 build order:
 
 - Accounts and context: person, environment, goals, programme, dashboard, domain state,
   audit events, per-account timezone.
@@ -20,13 +20,46 @@ Slices 1–5 of the plan's §10 build order:
 - JSON API at `/api/v1`: bearer tokens from `/tokens`, one success envelope, page blocks,
   owner-scoped ids (`404`, never `403`), the write rules of §5, `/summary`,
   `/expected-doses`, `/adherence`, `/health`, plus public `/docs` (Swagger) and
-  `/openapi.json`. The contract is committed at `docs/api/openapi.json`; regenerate it with
-  `uv run python tools/dump_openapi.py`.
+  `/openapi.json`. The schema is generated from the routes and served at
+  `/api/v1/openapi.json` and `/api/v1/docs`.
 - Labs: `/labs` lists panels, `/labs/new` adds one panel's analytes in a single form and
   pre-fills analytes, units and reference bounds from the last panel with the same name.
 - Polish: `/export` (zip of the account's JSON), `/purge`, `/search` and `/llms.txt`.
 
-Backup and restore (§8) are not built yet.
+### Backup and restore
+
+`compose.backup.yaml` mounts `${APP_BACKUP_PATH}` at `/backups`; the nightly run is one
+verified copy, and older ones are pruned:
+
+```sh
+docker compose -f compose.yaml -f compose.backup.yaml run --rm app \
+  python manage.py backup_health_info /backups/2026-11-24T0310
+```
+
+`restore_health_info <backup> <destination>` re-checks a backup and writes
+`<destination>/db.sqlite3`; it never edits a live file. `<destination>` is a host path under
+`${APP_RESTORE_PATH}`, which `compose.restore.yaml` mounts at `/restores`. First write the
+copy with a one-shot container — `/backups` comes from `compose.backup.yaml`, not from the
+restore one:
+
+```sh
+docker compose -f compose.yaml -f compose.backup.yaml -f compose.restore.yaml run --rm app \
+  python manage.py restore_health_info /backups/2026-11-24T0310 /restores/check-1
+```
+
+Then boot that copy on the spare port under its own project, so the drill gets its own
+container and can neither recreate nor detach the live app. `APP_DATA_PATH` is spelled out in
+full rather than read from `.env`: Compose parses that file itself, so the shell cannot expand
+a value from it, and the override keeps this run off the live data directory:
+
+```sh
+APP_DATA_PATH="/volume1/docker/health-info/restores/check-1" \
+  docker compose -p health-info-restore -f compose.yaml -f compose.restore.yaml up -d
+```
+
+Stop the drill first — `docker compose -p health-info-restore down` — so that only one
+container ever has `/data`. Point `APP_DATA_PATH` at that directory only once it has answered
+on `127.0.0.1:8001`.
 
 ## Run it locally
 
@@ -55,10 +88,12 @@ docker compose -f compose.yaml -f compose.proxy-network.yaml up -d
 ```
 
 The app listens on `0.0.0.0:8000` inside the container and never publicly; TLS terminates
-in the proxy. `/healthz` is the only anonymous route. `/data` holds `db.sqlite3` and must be
-a private, host-local filesystem. `compose.host-port.yaml` publishes `127.0.0.1:8000` for a
-host proxy; `compose.local-build.yaml` builds the image from this working copy instead of
-pulling a published one.
+in the proxy. `/healthz`, `/login`, `/logout`, `/password`, `/favicon.ico` and the API's own
+`/api/v1/docs` and `/api/v1/openapi.json` are anonymous; every other route needs a session or
+a token. `/data` holds `db.sqlite3` and must be a private, host-local filesystem.
+`compose.host-port.yaml` publishes `127.0.0.1:8000` for a host proxy;
+`compose.local-build.yaml` builds the image from this working copy instead of pulling a
+published one.
 
 ## Development container
 
@@ -112,7 +147,6 @@ rules and the contributor agreement.
 health_info/   settings (base/development/production/test), server, urls, wsgi
 records/       models, forms, views, api, registries, schedule (derived), summary
 records/db/    the WAL-enforcing SQLite backend
-docs/api/      the committed OpenAPI contract
 tests/         schedule, isolation (UI and API), registry, memory, UI, auth
-tools/         healthcheck, openapi dump, production check, image audit, release scripts
+tools/         healthcheck, production check, image audit, release scripts
 ```

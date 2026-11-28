@@ -2,7 +2,6 @@
 
 import json
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
 
 import pytest
 from django.db import connection
@@ -484,13 +483,6 @@ def test_the_environment_singleton_carries_its_state(api):
     assert updated.json()["environment"]["state"] == "present"
     response = patch(api, "/api/v1/environment", {"equipment": ["sentinel-gear"]})
     assert response.status_code == 422
-
-
-def test_openapi_is_committed_and_current():
-    path = Path(__file__).resolve().parent.parent / "docs" / "api" / "openapi.json"
-    committed = path.read_text(encoding="utf-8")
-    generated = json.dumps(A.api.get_openapi_schema(), indent=2, sort_keys=True) + "\n"
-    assert committed == generated, "run `uv run python tools/dump_openapi.py`"
 
 
 def test_the_docs_and_the_spec_are_public():
