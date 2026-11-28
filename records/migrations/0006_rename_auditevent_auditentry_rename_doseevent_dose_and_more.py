@@ -23,10 +23,6 @@ class Migration(migrations.Migration):
             old_name="Period",
             new_name="Event",
         ),
-        migrations.RemoveConstraint(
-            model_name="event",
-            name="period_end_after_start",
-        ),
         migrations.RenameIndex(
             model_name="auditentry",
             new_name="records_aud_user_id_ea385b_idx",
@@ -47,13 +43,29 @@ class Migration(migrations.Migration):
             new_name="records_eve_user_id_3c3616_idx",
             old_name="records_per_user_id_eb1a6a_idx",
         ),
-        migrations.AddConstraint(
-            model_name="event",
-            constraint=models.CheckConstraint(
-                condition=models.Q(
-                    ("end__gte", models.F("start")), ("end__isnull", True), _connector="OR"
+        # The constraint swap is state only: SQLite enforces a check constraint by rebuilding the
+        # table, and a rebuild of records_event hands out ids of events deleted before the
+        # upgrade again, which a bookmark or an audit row would then find pointing at another
+        # event. The check compares the same two columns under either name, so the table keeps
+        # the one it was created with and both install paths end up identical.
+        migrations.SeparateDatabaseAndState(
+            database_operations=[],
+            state_operations=[
+                migrations.RemoveConstraint(
+                    model_name="event",
+                    name="period_end_after_start",
                 ),
-                name="event_end_after_start",
-            ),
+                migrations.AddConstraint(
+                    model_name="event",
+                    constraint=models.CheckConstraint(
+                        condition=models.Q(
+                            ("end__gte", models.F("start")),
+                            ("end__isnull", True),
+                            _connector="OR",
+                        ),
+                        name="event_end_after_start",
+                    ),
+                ),
+            ],
         ),
     ]

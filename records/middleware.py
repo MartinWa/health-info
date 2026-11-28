@@ -28,15 +28,23 @@ class AccountTimezoneMiddleware:
 
 
 def _error(status, code, message):
+    from records import api as A
     from records import registries as R
 
     body = {
         "error": {"code": code, "message": message, "details": []},
-        "contract_version": "1.0",
+        "contract_version": A.CONTRACT_VERSION,
         "generated_at": timezone.now().isoformat(),
         "registry_version": R.REGISTRY_VERSION,
     }
     return HttpResponse(json.dumps(body), status=status, content_type="application/json")
+
+
+def _public_document_paths():
+    """The docs and the spec are public documents: no auth, no data, no per-request change."""
+    from records.api import api
+
+    return {f"/api/v1{api.openapi_url}", f"/api/v1{api.docs_url}"}
 
 
 class ApiGuardMiddleware:
@@ -70,6 +78,10 @@ class ApiGuardMiddleware:
             )
             if allowed:
                 response["Allow"] = allowed
-        response["Cache-Control"] = "no-store"
+        if request.path in _public_document_paths():
+            # Only a deploy changes these, and the response holds no data.
+            response["Cache-Control"] = "public, max-age=300"
+        else:
+            response["Cache-Control"] = "no-store"
         response["Vary"] = "Authorization"
         return response

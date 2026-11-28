@@ -267,6 +267,23 @@ def test_blood_pressure_is_one_panel_with_components(api, user):
     assert {item["metric"] for item in listed["items"]} == {"pulse", "blood_pressure"}
 
 
+def test_a_panel_lists_its_components_systolic_first_whatever_the_insert_order(api, user):
+    at = datetime(2026, 11, 24, 8, 0, tzinfo=UTC)
+    panel = M.Measurement._default_manager.create(user=user, metric="blood_pressure", at=at)
+    for code, value in (("diastolic_bp", 80), ("systolic_bp", 120)):
+        M.Measurement._default_manager.create(
+            user=user, metric=code, value=value, unit="mmHg", at=at, parent=panel
+        )
+    assert [part.metric for part in panel.components.all()] == ["diastolic_bp", "systolic_bp"]
+    assert [part.metric for part in panel.ordered_components()] == ["systolic_bp", "diastolic_bp"]
+    _, payload = get(api, f"/api/v1/measurements/{panel.pk}")
+    assert [part["metric"] for part in payload["components"]] == ["systolic_bp", "diastolic_bp"]
+    _, listed = get(api, "/api/v1/measurements?start=2026-11-01&end=2026-11-30")
+    assert [[part["metric"] for part in item["components"]] for item in listed["items"]] == [
+        ["systolic_bp", "diastolic_bp"]
+    ]
+
+
 def test_blood_pressure_needs_both_components(api):
     response = post(
         api,
@@ -442,6 +459,19 @@ def test_health_reports_versions_and_counts(api):
     assert payload["counts"]["measurements"] == 0
 
 
+def test_health_counts_doses_under_the_new_name(api, course):
+    medication = course()
+    medication.save()
+    post(
+        api,
+        "/api/v1/doses",
+        {"medication_id": medication.pk, "status": "taken", "at": "2026-11-24T08:00:00Z"},
+    )
+    _, payload = get(api, "/api/v1/health")
+    assert payload["counts"]["doses"] == 1
+    assert "dose_events" not in payload["counts"]
+
+
 def test_the_environment_singleton_carries_its_state(api):
     _, payload = get(api, "/api/v1/environment")
     assert payload["environment"]["state"] == "unknown"
@@ -468,6 +498,27 @@ def test_the_docs_and_the_spec_are_public():
     docs = anonymous.get("/api/v1/docs")
     assert docs.status_code == 200
     assert "swagger" in docs.content.decode().lower()
+
+
+def test_the_public_documents_are_cacheable_and_everything_else_is_not():
+    anonymous = Client()
+    for url in ("/api/v1/docs", "/api/v1/openapi.json"):
+        response = anonymous.get(url)
+        assert response.status_code == 200, url
+        assert response["Cache-Control"] == "public, max-age=300", url
+        assert "Authorization" in response["Vary"], url
+    private = anonymous.get("/api/v1/goals")
+    assert private.status_code == 401
+    assert private["Cache-Control"] == "no-store"
+
+
+def test_the_removed_routes_answer_404():
+    anonymous = Client()
+    for url in ("/api/v1/periods", "/api/v1/dose-events"):
+        response = anonymous.get(url)
+        assert response.status_code == 404, url
+        assert body(response)["error"]["code"] == "not_found", url
+        assert body(response)["contract_version"] == A.CONTRACT_VERSION, url
 
 
 def test_api_has_no_bare_default_manager_calls():

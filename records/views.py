@@ -1087,7 +1087,7 @@ def regimen(request):
         {
             "course": course,
             "schedule": S.describe_schedule(course.schedule),
-            "doses": course.dose_events.count(),
+            "doses": course.doses.count(),
             "detail_url": reverse("records:medications_detail", args=[course.pk]),
         }
         for course in courses

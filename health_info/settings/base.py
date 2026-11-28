@@ -41,6 +41,8 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # django-ninja renders its swagger UI from local static files when it is installed.
+    "ninja",
     "records.apps.RecordsConfig",
 ]
 MIDDLEWARE = [

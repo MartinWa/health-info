@@ -19,9 +19,10 @@ def main():
 
     path = ROOT / "docs" / "api" / "openapi.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(api.get_openapi_schema(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    # The repository pins eol=lf; Windows text mode would otherwise write CRLF and dirty the
+    # committed copy every time the tool runs.
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(api.get_openapi_schema(), indent=2, sort_keys=True) + "\n")
     print(f"wrote {path}")
 
 

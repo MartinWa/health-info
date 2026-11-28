@@ -397,7 +397,7 @@ class Medication(OwnedRecord):
 
 
 class Dose(OwnedRecord):
-    medication = models.ForeignKey(Medication, on_delete=models.PROTECT, related_name="dose_events")
+    medication = models.ForeignKey(Medication, on_delete=models.PROTECT, related_name="doses")
     status = models.CharField(max_length=8, choices=R.choices(R.DOSE_STATUS), default="taken")
     at = models.DateTimeField()
     scheduled_for = models.DateTimeField(null=True, blank=True)
@@ -496,6 +496,9 @@ class Measurement(OwnedRecord):
         if not {"log", "panel"} & metric.use:
             raise ValidationError({"metric": "This metric cannot be measured."})
         self.metric = metric.code
+        # Before the panel branch returns: a component's owner is validated too.
+        if self.parent and self.parent.user_id != self.user_id:
+            raise ValidationError({"parent": "Unknown measurement."})
         if "panel" in metric.use:
             # A panel carries no number of its own: its components hold the reading.
             if self.value is not None:
@@ -507,8 +510,6 @@ class Measurement(OwnedRecord):
         if self.unit and self.unit != metric.unit:
             raise ValidationError({"unit": "Unit does not match the metric."})
         self.unit = metric.unit
-        if self.parent and self.parent.user_id != self.user_id:
-            raise ValidationError({"parent": "Unknown measurement."})
 
     @property
     def is_panel(self):
@@ -518,6 +519,12 @@ class Measurement(OwnedRecord):
 
     def components_by_metric(self):
         return {part.metric: part.value for part in self.components.all()}
+
+    def ordered_components(self):
+        """Components in registry order, so systolic_bp leads its own panel."""
+        order = {code: index for index, code in enumerate(R.METRICS)}
+        parts = list(self.components.all())
+        return sorted(parts, key=lambda part: order.get(part.metric, len(order)))
 
     @property
     def reading(self):

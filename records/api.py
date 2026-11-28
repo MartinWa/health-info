@@ -21,7 +21,7 @@ from ninja import NinjaAPI, Schema
 from ninja.errors import AuthenticationError, HttpError
 from ninja.errors import ValidationError as NinjaValidationError
 from ninja.security import HttpBearer
-from pydantic import ConfigDict, Field, PlainSerializer, create_model
+from pydantic import ConfigDict, Field, PlainSerializer, create_model, field_validator
 
 from records import models as M
 from records import registries as R
@@ -100,7 +100,19 @@ class Bearer(HttpBearer):
         return row
 
 
-api = NinjaAPI(
+class HealthInfoAPI(NinjaAPI):
+    """The public schema is fixed for the life of the process, so build it once per root path."""
+
+    _schemas = {}
+
+    def get_openapi_schema(self, *, path_prefix=None, path_params=None):
+        key = path_prefix if path_prefix is not None else self.get_root_path(path_params or {})
+        if key not in self._schemas:
+            self._schemas[key] = super().get_openapi_schema(path_prefix=key)
+        return self._schemas[key]
+
+
+api = HealthInfoAPI(
     title="healthinfo",
     version=CONTRACT_VERSION,
     description="One household's authored health records. Bearer token, owner-scoped.",
@@ -319,6 +331,15 @@ class ComponentOut(Schema):
     fasted: bool | None = None
 
 
+COMPONENT_ORDER = {code: index for index, code in enumerate(R.METRICS)}
+
+
+def component_rank(part) -> int:
+    """Registry position of a component, whether it arrives as a row or as a dumped dict."""
+    metric = part.get("metric") if isinstance(part, dict) else part.metric
+    return COMPONENT_ORDER.get(metric, len(COMPONENT_ORDER))
+
+
 class MeasurementOut(RecordOut):
     metric: str
     value: Number | None = None
@@ -330,6 +351,12 @@ class MeasurementOut(RecordOut):
     device: str
     note: str
     components: list[ComponentOut] = Field(default_factory=list)
+
+    @field_validator("components", mode="before")
+    @classmethod
+    def _components_in_registry_order(cls, components):
+        """Every component shares the panel's `at`, so the database order is arbitrary."""
+        return sorted(components or (), key=component_rank)
 
 
 class SymptomOut(RecordOut):
@@ -1940,7 +1967,7 @@ def health(request):
         domain: model._default_manager.filter(user=user).count()
         for domain, model in M.DOMAIN_MODELS.items()
     }
-    counts["dose_events"] = M.Dose._default_manager.filter(user=user).count()
+    counts["doses"] = M.Dose._default_manager.filter(user=user).count()
     return {
         **envelope(),
         "status": "ok",
