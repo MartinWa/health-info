@@ -551,18 +551,20 @@ class MeasurementForm(OwnerForm):
             )
             if cleaned.get(name) is not None
         }
-        self.warnings = R.check_value(metric, cleaned["value"]) if cleaned.get("value") else []
+        value = cleaned.get("value")
+        # A zero is a reading, not an empty field, so it takes the range check too.
+        self.warnings = R.check_value(metric, value) if value is not None else []
         self.warnings += [
             warning
             for code, number in entered.items()
             for warning in R.check_value(R.METRICS[code], number)
         ]
         if "panel" in metric.use:
-            if cleaned.get("value") is not None:
+            if value is not None:
                 raise ValidationError("A blood pressure reading has no single value.")
             if {"systolic_bp", "diastolic_bp"} - set(entered):
                 raise ValidationError("A blood pressure reading needs both numbers.")
-        elif cleaned.get("value") is None:
+        elif value is None:
             self.add_error("value", "This metric needs a value.")
         # A prefilled timestamp left untouched is stamped again, so a form opened hours
         # ago does not save the minute it was opened at.
@@ -570,7 +572,9 @@ class MeasurementForm(OwnerForm):
             cleaned["at"] = timezone.localtime().replace(second=0, microsecond=0)
         return cleaned
 
+    @transaction.atomic
     def save(self, commit=True):
+        # Two writes when a panel becomes a scalar: the row, then the components it owned.
         if "panel" in R.METRICS[self.cleaned_data["metric"]].use:
             return self._save_panel()
         instance = super().save(commit)
@@ -590,6 +594,9 @@ class MeasurementForm(OwnerForm):
             metric = R.METRICS[code]
             M.Measurement.objects.create(
                 user=self.user,
+                # The panel keeps who reported it; its numbers must not change hands.
+                source=panel.source,
+                reported_by=panel.reported_by,
                 metric=code,
                 value=self.cleaned_data[name],
                 unit=metric.unit,

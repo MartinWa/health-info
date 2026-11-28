@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from records import models as M
+from records import registries as R
 
 
 def at(day="2026-11-02", hour=8, minute=0):
@@ -34,14 +35,21 @@ def test_the_page_carries_the_name_and_the_icon(logged_in):
     assert 'class="brand-info"' in body
     assert 'rel="icon"' in body
     assert "records/favicon.svg" in body
+    assert "records/favicon.ico" in body
     assert 'content="#f5f6f8"' in body
+    # The page turns #101319 in dark mode, so the status bar is given the same colour twice.
+    dark_theme = '<meta name="theme-color" content="#101319" media="(prefers-color-scheme: dark)">'
+    assert dark_theme in body
 
 
 def test_favicon_ico_redirects_to_the_icon(client):
     response = client.get("/favicon.ico")
     assert response.status_code == 301
-    assert response["Location"] == "/static/records/favicon.svg"
-    assert (Path(__file__).resolve().parent.parent / "records/static/records/favicon.svg").exists()
+    assert response["Location"] == "/static/records/favicon.ico"
+    icon = Path(__file__).resolve().parent.parent / "records/static/records/favicon.ico"
+    assert icon.exists()
+    # A real ICO, because the consumers of this path are the ones that cannot read an SVG.
+    assert icon.read_bytes()[:4] == b"\x00\x00\x01\x00"
 
 
 def test_dashboard_starts_every_domain_unknown(logged_in):
@@ -280,6 +288,35 @@ def test_a_panel_is_edited_with_its_two_numbers_and_keeps_one_reading(user, logg
     assert panel.components.get(metric="diastolic_bp").value == 86
 
 
+def test_editing_a_client_written_panel_keeps_its_provenance(user, logged_in):
+    panel = M.Measurement._default_manager.create(
+        user=user,
+        source="client",
+        reported_by="health-mcp",
+        metric="blood_pressure",
+        at=timezone.now(),
+    )
+    for code, value in (("systolic_bp", 120), ("diastolic_bp", 80)):
+        M.Measurement._default_manager.create(
+            user=user,
+            source="client",
+            reported_by="health-mcp",
+            metric=code,
+            value=value,
+            unit=R.METRICS[code].unit,
+            at=panel.at,
+            parent=panel,
+        )
+    response = logged_in.post(
+        reverse("records:measurements_edit", args=[panel.pk]),
+        blood_pressure(systolic=118, diastolic=78),
+    )
+    assert response.status_code == 303
+    components = panel.components.all()
+    assert set(components.values_list("source", "reported_by")) == {("client", "health-mcp")}
+    assert components.get(metric="systolic_bp").value == 118
+
+
 def test_a_row_turns_into_a_panel_and_back(user, logged_in):
     logged_in.post(
         reverse("records:measurements_new"),
@@ -296,6 +333,15 @@ def test_a_row_turns_into_a_panel_and_back(user, logged_in):
     row.refresh_from_db()
     assert (row.metric, row.value) == ("body_weight", Decimal("81"))
     assert row.components.count() == 0
+
+
+def test_a_zero_value_is_rejected_instead_of_stored(user, logged_in):
+    response = logged_in.post(
+        reverse("records:measurements_new"), {"metric": "body_weight", "value": "0", "at": at()}
+    )
+    assert response.status_code == 200
+    assert "Value is outside the accepted range." in response.content.decode()
+    assert not M.Measurement._default_manager.filter(user=user).exists()
 
 
 def test_pulse_is_a_metric_of_its_own(user, logged_in):
