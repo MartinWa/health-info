@@ -170,13 +170,18 @@ def test_an_outlier_is_stored_with_a_warning(user, logged_in):
 
 def test_blood_pressure_components_are_not_listed_alone(user, logged_in):
     logged_in.post(
-        reverse("records:quick_measurement"),
-        {"systolic": 120, "diastolic": 80, "pulse": 60, "at": "2026-11-02T08:00"},
+        reverse("records:measurements_new"),
+        {
+            "metric": "blood_pressure",
+            "systolic": 120,
+            "diastolic": 80,
+            "at": "2026-11-02T08:00",
+        },
     )
     panel = M.Measurement._default_manager.get(user=user, metric="blood_pressure")
     component = panel.components.first()
     listing = logged_in.get(reverse("records:measurements_list"))
-    assert len(listing.context["rows"]) == 2  # the panel and the pulse row
+    assert len(listing.context["rows"]) == 1  # the panel only; its numbers are components
     component_url = reverse("records:measurements_detail", args=[component.pk])
     assert logged_in.get(component_url).status_code == 404
     detail = logged_in.get(reverse("records:measurements_detail", args=[panel.pk]))
@@ -244,15 +249,28 @@ def test_a_stop_date_before_the_change_date_is_a_field_error(user, logged_in, co
     assert M.Medication._default_manager.filter(user=user).count() == 1
 
 
-def test_a_blood_pressure_panel_is_not_edited_with_the_scalar_form(user, logged_in, make_row):
+def test_a_panel_edit_replaces_its_components_and_keeps_the_panel(user, logged_in):
     logged_in.post(
-        reverse("records:quick_measurement"),
-        {"systolic": 120, "diastolic": 80, "at": "2026-11-02T08:00"},
+        reverse("records:measurements_new"),
+        {
+            "metric": "blood_pressure",
+            "systolic": 120,
+            "diastolic": 80,
+            "at": "2026-11-02T08:00",
+        },
     )
     panel = M.Measurement._default_manager.get(user=user, metric="blood_pressure")
-    assert logged_in.get(reverse("records:measurements_edit", args=[panel.pk])).status_code == 404
-    body = logged_in.get(reverse("records:measurements_detail", args=[panel.pk])).content.decode()
-    assert reverse("records:measurements_edit", args=[panel.pk]) not in body
+    edit_url = reverse("records:measurements_edit", args=[panel.pk])
+    form_page = logged_in.get(edit_url).content.decode()
+    assert 'value="120"' in form_page and 'value="80"' in form_page
+    response = logged_in.post(
+        edit_url,
+        {"metric": "blood_pressure", "systolic": 118, "diastolic": 78, "at": "2026-11-02T08:00"},
+    )
+    assert response.status_code == 303
+    assert panel.components.get(metric="systolic_bp").value == 118
+    assert panel.components.get(metric="diastolic_bp").value == 78
+    assert M.Measurement._default_manager.filter(user=user).count() == 3  # panel + two numbers
     delete_url = reverse("records:measurements_delete", args=[panel.pk])
     assert logged_in.post(delete_url).status_code == 303
     assert not M.Measurement._default_manager.filter(user=user).exists()

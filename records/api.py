@@ -9,7 +9,6 @@ import hashlib
 import hmac
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from functools import wraps
 from typing import Annotated, Any
 
 from django.conf import settings
@@ -101,30 +100,12 @@ class Bearer(HttpBearer):
         return row
 
 
-def docs_guard(view):
-    """`/docs` and `/openapi.json` need a session or the same bearer token as the API."""
-
-    @wraps(view)
-    def wrapped(request, *args, **kwargs):
-        if request.user.is_authenticated:
-            return view(request, *args, **kwargs)
-        try:
-            if Bearer()(request) is None:
-                raise AuthenticationError(message="Unauthorized.")
-        except HttpError:
-            return error_response(request, 401, "unauthorized", "Unauthorized.")
-        return view(request, *args, **kwargs)
-
-    return wrapped
-
-
 api = NinjaAPI(
-    title="health-info",
+    title="healthinfo",
     version=CONTRACT_VERSION,
     description="One household's authored health records. Bearer token, owner-scoped.",
     urls_namespace="api",
     auth=Bearer(),
-    docs_decorator=docs_guard,
 )
 
 
@@ -164,7 +145,7 @@ def _ninja_validation(request, exc: NinjaValidationError):
 @api.exception_handler(AuthenticationError)
 def _unauthorized(request, exc: AuthenticationError):
     response = error_response(request, 401, "unauthorized", "Unauthorized.")
-    response["WWW-Authenticate"] = 'Bearer realm="health-info"'
+    response["WWW-Authenticate"] = 'Bearer realm="healthinfo"'
     return response
 
 
@@ -1043,7 +1024,7 @@ def warnings_for(metric, value, path):
 def goal_warnings(user, metric, direction, status, pk=None):
     warnings = []
     if R.METRICS[metric].authority.startswith("external:"):
-        warnings.append("This metric is recorded outside health-info; the goal cannot track it.")
+        warnings.append("This metric is recorded outside healthinfo; the goal cannot track it.")
     if status == "active":
         others = M.Goal._default_manager.filter(user=user, metric=metric, status="active").exclude(
             pk=pk

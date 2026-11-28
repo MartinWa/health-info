@@ -2,7 +2,9 @@
 
 from django.contrib import admin
 from django.contrib.auth.views import LogoutView, PasswordChangeView
+from django.templatetags.static import static
 from django.urls import include, path
+from django.views.generic import RedirectView
 
 from records.api import api
 from records.views import LoginView, healthz
@@ -18,6 +20,8 @@ urlpatterns = [
         name="password",
     ),
     path("admin/", admin.site.urls),
+    # Browsers and link unfurlers ask for this path even with a <link rel="icon">.
+    path("favicon.ico", RedirectView.as_view(url=static("records/favicon.svg"), permanent=True)),
     # Anonymous root probe: no health data, no account data.
     path("healthz", healthz, name="healthz"),
 ]

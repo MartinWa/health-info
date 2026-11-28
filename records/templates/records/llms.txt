@@ -1,4 +1,4 @@
-# health-info
+# healthinfo
 
 One household's self-hosted health records. Authored data only: no charts, no scores, no
 device series. Version {{ app_version }}, registry version {{ registry_version }}.
@@ -49,7 +49,8 @@ UI-only: identity (`/person`), medication plan, allergies, labs, vaccinations, p
 Metric codes, enums and units are fixed in the server registry
 (`registry_version {{ registry_version }}`). Metric aliases resolve on input; responses always
 carry the canonical code. A reading outside the plausible range is stored with a `warnings`
-list; outside the hard range it is rejected.
+list; outside the hard range it is rejected. A blood pressure reading is a panel: its
+`value` is null and its numbers live on `components` (`systolic_bp`, `diastolic_bp`).
 
 ## Not this service
 

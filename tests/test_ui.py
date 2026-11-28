@@ -3,6 +3,7 @@
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from django.urls import reverse
@@ -15,6 +16,34 @@ def at(day="2026-11-02", hour=8, minute=0):
     return f"{day}T{hour:02d}:{minute:02d}"
 
 
+def blood_pressure(**overrides):
+    payload = {
+        "metric": "blood_pressure",
+        "systolic": 120,
+        "diastolic": 80,
+        "at": at(),
+        "note": "",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_the_page_carries_the_name_and_the_icon(logged_in):
+    body = logged_in.get(reverse("records:dashboard")).content.decode()
+    assert "healthinfo" in body
+    assert 'class="brand-info"' in body
+    assert 'rel="icon"' in body
+    assert "records/favicon.svg" in body
+    assert 'content="#f5f6f8"' in body
+
+
+def test_favicon_ico_redirects_to_the_icon(client):
+    response = client.get("/favicon.ico")
+    assert response.status_code == 301
+    assert response["Location"] == "/static/records/favicon.svg"
+    assert (Path(__file__).resolve().parent.parent / "records/static/records/favicon.svg").exists()
+
+
 def test_dashboard_starts_every_domain_unknown(logged_in):
     response = logged_in.get(reverse("records:dashboard"))
     assert response.status_code == 200
@@ -24,17 +53,14 @@ def test_dashboard_starts_every_domain_unknown(logged_in):
     assert "Not asked yet" not in "".join(states.values())
 
 
-def test_blood_pressure_creates_panel_two_components_and_a_pulse_row(user, logged_in):
-    response = logged_in.post(
-        reverse("records:quick_measurement"),
-        {"systolic": 120, "diastolic": 80, "pulse": 60, "at": at(), "note": ""},
-    )
+def test_blood_pressure_creates_a_panel_and_two_component_rows(user, logged_in):
+    response = logged_in.post(reverse("records:measurements_new"), blood_pressure())
     assert response.status_code == 303
     panel = M.Measurement._default_manager.get(user=user, metric="blood_pressure")
+    assert panel.value is None
     assert panel.components.count() == 2
     assert panel.components.filter(metric="systolic_bp", value=120).exists()
-    assert M.Measurement._default_manager.get(user=user, metric="pulse").parent is None
-    assert M.Measurement._default_manager.filter(user=user).count() == 4
+    assert M.Measurement._default_manager.filter(user=user).count() == 3
 
 
 def test_second_dose_tap_is_a_no_op(user, logged_in, course):
@@ -201,7 +227,7 @@ def test_list_shows_a_badge_for_client_written_rows(user, logged_in):
         "records:dashboard",
         "records:quick",
         "records:quick_dose",
-        "records:quick_measurement",
+        "records:measurements_new",
         "records:quick_symptom",
         "records:quick_note",
         "records:quick_checkin",
@@ -226,16 +252,65 @@ def test_a_pulse_row_without_a_value_does_not_break_the_dashboard(user, logged_i
     assert "Pulse" in response.content.decode()
 
 
+def test_the_measurements_list_shows_a_panel_reading_in_its_value_column(user, logged_in):
+    logged_in.post(reverse("records:measurements_new"), blood_pressure())
+    body = logged_in.get(reverse("records:measurements_list")).content.decode()
+    assert "120/80" in body
+    assert "mmHg" in body
+
+
+def test_a_saved_reading_lands_on_its_own_page(user, logged_in):
+    response = logged_in.post(reverse("records:measurements_new"), blood_pressure())
+    panel = M.Measurement._default_manager.get(user=user, metric="blood_pressure")
+    assert response["Location"] == reverse("records:measurements_detail", args=[panel.pk])
+
+
+def test_a_panel_is_edited_with_its_two_numbers_and_keeps_one_reading(user, logged_in):
+    logged_in.post(reverse("records:measurements_new"), blood_pressure())
+    panel = M.Measurement._default_manager.get(user=user, metric="blood_pressure")
+    edit = reverse("records:measurements_edit", args=[panel.pk])
+    assert logged_in.get(edit).status_code == 200
+    response = logged_in.post(
+        edit, {"metric": "blood_pressure", "systolic": 132, "diastolic": 86, "at": at()}
+    )
+    assert response.status_code == 303
+    assert M.Measurement._default_manager.filter(user=user, metric="blood_pressure").count() == 1
+    assert panel.components.count() == 2
+    assert panel.components.get(metric="systolic_bp").value == 132
+    assert panel.components.get(metric="diastolic_bp").value == 86
+
+
+def test_a_row_turns_into_a_panel_and_back(user, logged_in):
+    logged_in.post(
+        reverse("records:measurements_new"),
+        {"metric": "body_weight", "value": "82.4", "at": at()},
+    )
+    row = M.Measurement._default_manager.get(user=user, metric="body_weight")
+    edit = reverse("records:measurements_edit", args=[row.pk])
+    logged_in.post(edit, blood_pressure())
+    row.refresh_from_db()
+    assert (row.metric, row.value) == ("blood_pressure", None)
+    assert row.components.count() == 2
+
+    logged_in.post(edit, {"metric": "body_weight", "value": "81", "at": at()})
+    row.refresh_from_db()
+    assert (row.metric, row.value) == ("body_weight", Decimal("81"))
+    assert row.components.count() == 0
+
+
+def test_pulse_is_a_metric_of_its_own(user, logged_in):
+    response = logged_in.post(
+        reverse("records:measurements_new"), {"metric": "pulse", "value": "58", "at": at()}
+    )
+    assert response.status_code == 303
+    reading = M.Measurement._default_manager.get(user=user, metric="pulse")
+    assert (reading.value, reading.unit, reading.parent) == (58, "/min", None)
+
+
 def test_arm_and_posture_land_on_the_panel_and_its_components(user, logged_in):
     response = logged_in.post(
-        reverse("records:quick_measurement"),
-        {
-            "systolic": 120,
-            "diastolic": 80,
-            "at": at(),
-            "side": "left",
-            "posture": "sitting",
-        },
+        reverse("records:measurements_new"),
+        blood_pressure(side="left", posture="sitting"),
     )
     assert response.status_code == 303
     panel = M.Measurement._default_manager.get(user=user, metric="blood_pressure")
@@ -246,8 +321,8 @@ def test_arm_and_posture_land_on_the_panel_and_its_components(user, logged_in):
 def test_an_untouched_measurement_time_is_stamped_again_at_submission(user, logged_in):
     stale = "2026-11-02T08:00"
     response = logged_in.post(
-        reverse("records:quick_measurement"),
-        {"systolic": 120, "diastolic": 80, "at": stale, "at_default": stale},
+        reverse("records:measurements_new"),
+        blood_pressure(at=stale, at_default=stale),
     )
     assert response.status_code == 303
     panel = M.Measurement._default_manager.get(user=user, metric="blood_pressure")
@@ -257,17 +332,16 @@ def test_an_untouched_measurement_time_is_stamped_again_at_submission(user, logg
 def test_a_chosen_measurement_time_is_kept(user, logged_in):
     chosen = "2026-11-02T08:00"
     response = logged_in.post(
-        reverse("records:quick_measurement"),
-        {"systolic": 120, "diastolic": 80, "at": chosen, "at_default": "2026-11-02T09:30"},
+        reverse("records:measurements_new"),
+        blood_pressure(at=chosen, at_default="2026-11-02T09:30"),
     )
     assert response.status_code == 303
     panel = M.Measurement._default_manager.get(user=user, metric="blood_pressure")
     assert timezone.localtime(panel.at).strftime("%Y-%m-%dT%H:%M") == chosen
 
 
-def test_a_missing_measurement_time_reopens_its_section(logged_in):
-    response = logged_in.post(
-        reverse("records:quick_measurement"), {"systolic": 120, "diastolic": 80, "at": ""}
-    )
+def test_a_missing_measurement_time_is_a_field_error(user, logged_in):
+    response = logged_in.post(reverse("records:measurements_new"), blood_pressure(at=""))
     assert response.status_code == 200
-    assert 'class="details-panel" open' in response.content.decode()
+    assert 'class="field invalid"' in response.content.decode()
+    assert not M.Measurement._default_manager.filter(user=user).exists()

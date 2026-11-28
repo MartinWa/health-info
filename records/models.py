@@ -15,6 +15,11 @@ from django.utils import timezone
 from records import registries as R
 
 
+def _plain(value):
+    """A Decimal as plain digits: no exponent, no trailing zeros."""
+    return format(value.normalize(), "f")
+
+
 class Source:
     OWNER, CLIENT, IMPORT, DEVICE = R.SOURCE
 
@@ -488,9 +493,15 @@ class Measurement(OwnedRecord):
 
     def clean(self):
         metric = R.resolve_metric(self.metric)
-        if "log" not in metric.use:
+        if not {"log", "panel"} & metric.use:
             raise ValidationError({"metric": "This metric cannot be measured."})
         self.metric = metric.code
+        if "panel" in metric.use:
+            # A panel carries no number of its own: its components hold the reading.
+            if self.value is not None:
+                raise ValidationError({"value": "A panel reading has no single value."})
+            self.unit = ""
+            return
         if self.value is not None:
             self.value = Decimal(self.value).quantize(Decimal(1).scaleb(-metric.digits))
         if self.unit and self.unit != metric.unit:
@@ -498,6 +509,36 @@ class Measurement(OwnedRecord):
         self.unit = metric.unit
         if self.parent and self.parent.user_id != self.user_id:
             raise ValidationError({"parent": "Unknown measurement."})
+
+    @property
+    def is_panel(self):
+        """A reading of two numbers, stored as this row plus one component per number."""
+        metric = R.METRICS.get(self.metric)
+        return metric is not None and "panel" in metric.use
+
+    def components_by_metric(self):
+        return {part.metric: part.value for part in self.components.all()}
+
+    @property
+    def reading(self):
+        """`120/80` for a panel, the plain number otherwise; `—` when nothing is recorded."""
+        if self.is_panel:
+            parts = self.components_by_metric()
+            numbers = [parts.get("systolic_bp"), parts.get("diastolic_bp")]
+        else:
+            numbers = [self.value]
+        if any(number is None for number in numbers):
+            return "—"
+        return "/".join(_plain(number) for number in numbers)
+
+    @property
+    def unit_text(self):
+        """`mmHg` for a panel, whose own unit column is empty; the stored unit otherwise."""
+        if self.is_panel:
+            unit = R.METRICS["systolic_bp"].unit
+        else:
+            unit = self.unit
+        return R.UNIT_DISPLAY.get(unit, unit)
 
     def __str__(self):
         return f"{self.metric} {self.value if self.value is not None else ''}".strip()

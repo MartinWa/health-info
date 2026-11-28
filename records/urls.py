@@ -18,7 +18,6 @@ urlpatterns = [
     path("goals/<int:pk>/delete", V.RESOURCE_VIEWS["goals"]["delete"], name="goals_delete"),
     path("state/<slug:domain>", V.set_domain_state, name="state"),
     path("quick", V.quick, name="quick"),
-    path("quick/measurement", V.quick_measurement, name="quick_measurement"),
     path("quick/symptom", V.quick_symptom, name="quick_symptom"),
     path("quick/dose", V.quick_dose, name="quick_dose"),
     path("quick/note", V.quick_note, name="quick_note"),

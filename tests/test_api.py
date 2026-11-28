@@ -460,6 +460,16 @@ def test_openapi_is_committed_and_current():
     assert committed == generated, "run `uv run python tools/dump_openapi.py`"
 
 
+def test_the_docs_and_the_spec_are_public():
+    anonymous = Client()
+    spec = anonymous.get("/api/v1/openapi.json")
+    assert spec.status_code == 200
+    assert spec.json()["openapi"].startswith("3.")
+    docs = anonymous.get("/api/v1/docs")
+    assert docs.status_code == 200
+    assert "swagger" in docs.content.decode().lower()
+
+
 def test_api_has_no_bare_default_manager_calls():
     source = open(A.__file__, encoding="utf-8").read()
     assert ".objects." not in source

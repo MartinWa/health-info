@@ -4,6 +4,10 @@
     <div>
       <span class="card-eyebrow">API access</span>
       <h1>{{ title }}</h1>
+      <p class="hint">The reference is public; every call from it still needs one of these tokens.</p>
+    </div>
+    <div class="page-actions">
+      <a class="button quiet" href="{% url 'api:openapi-view' %}" target="_blank" rel="noopener">API reference</a>
     </div>
   </div>
 

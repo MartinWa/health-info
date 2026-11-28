@@ -1,5 +1,5 @@
 [project]
-name = "health-info"
+name = "healthinfo"
 # Local tooling metadata only; published container versions come from Git tags.
 version = "0.0.1"
 description = "One household's health records: server-rendered UI and versioned JSON API"

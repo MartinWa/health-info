@@ -151,7 +151,7 @@ class GoalForm(OwnerForm):
                 break
         if R.METRICS[metric].authority.startswith("external:"):
             warnings.append(
-                "This metric is recorded outside health-info; the goal cannot track it alone."
+                "This metric is recorded outside healthinfo; the goal cannot track it alone."
             )
         return warnings
 
@@ -496,19 +496,44 @@ class LabAnalyteForm(forms.ModelForm):
 
 
 class MeasurementForm(OwnerForm):
-    """One metric per row; blood pressure has its own paired form."""
+    """Every measurement in one form: one number, or a blood pressure pair as a panel.
+
+    The metric decides which numbers apply. A paired metric stores its two numbers on
+    component rows beside the panel; every other metric, pulse included, takes one value.
+    """
 
     metric = forms.ChoiceField(
         choices=[
             (code, metric.display)
             for code, metric in R.METRICS.items()
-            if "log" in metric.use and not metric.paired
+            if not metric.paired and {"log", "panel"} & metric.use
         ]
     )
+    systolic = forms.IntegerField(
+        min_value=1, required=False, label="Systolic", help_text="Blood pressure only."
+    )
+    diastolic = forms.IntegerField(
+        min_value=1, required=False, label="Diastolic", help_text="Blood pressure only."
+    )
+    at_default = forms.CharField(required=False, widget=forms.HiddenInput)
 
     class Meta:
         model = M.Measurement
         fields = ["metric", "value", "at", "posture", "side", "fasted", "device", "note"]
+        labels = {"value": "Value", "side": "Arm"}
+
+    def __init__(self, *args, user, **kwargs):
+        super().__init__(*args, user=user, **kwargs)
+        self.warnings = []
+        # Read before binding: _post_clean overwrites instance.metric with the new choice.
+        self._editing_panel = bool(self.instance.pk and self.instance.is_panel)
+        if self._editing_panel and not self.is_bound:
+            parts = self.instance.components_by_metric()
+            for name, code in (("systolic", "systolic_bp"), ("diastolic", "diastolic_bp")):
+                value = parts.get(code)
+                self.initial[name] = None if value is None else int(value)
+        if not self.is_bound and not self.instance.pk:
+            self.initial["at_default"] = self.initial["at"].strftime("%Y-%m-%dT%H:%M")
 
     def clean_metric(self):
         return R.resolve_metric(self.cleaned_data["metric"]).code
@@ -516,106 +541,62 @@ class MeasurementForm(OwnerForm):
     def clean(self):
         cleaned = super().clean()
         metric = R.METRICS.get(cleaned.get("metric"))
-        value = cleaned.get("value")
-        self.warnings = R.check_value(metric, value) if metric and value is not None else []
+        if metric is None:
+            return cleaned
+        entered = {
+            code: cleaned.get(name)
+            for name, code in (
+                ("systolic", "systolic_bp"),
+                ("diastolic", "diastolic_bp"),
+            )
+            if cleaned.get(name) is not None
+        }
+        self.warnings = R.check_value(metric, cleaned["value"]) if cleaned.get("value") else []
+        self.warnings += [
+            warning
+            for code, number in entered.items()
+            for warning in R.check_value(R.METRICS[code], number)
+        ]
+        if "panel" in metric.use:
+            if cleaned.get("value") is not None:
+                raise ValidationError("A blood pressure reading has no single value.")
+            if {"systolic_bp", "diastolic_bp"} - set(entered):
+                raise ValidationError("A blood pressure reading needs both numbers.")
+        elif cleaned.get("value") is None:
+            self.add_error("value", "This metric needs a value.")
+        # A prefilled timestamp left untouched is stamped again, so a form opened hours
+        # ago does not save the minute it was opened at.
+        if cleaned.get("at_default") and self.data.get("at") == cleaned["at_default"]:
+            cleaned["at"] = timezone.localtime().replace(second=0, microsecond=0)
         return cleaned
 
-
-class BloodPressureForm(forms.Form):
-    systolic = forms.IntegerField(
-        min_value=1,
-        label="Systolic",
-        widget=forms.NumberInput(
-            attrs={"inputmode": "numeric", "class": "input big", "placeholder": "120"}
-        ),
-    )
-    diastolic = forms.IntegerField(
-        min_value=1,
-        label="Diastolic",
-        widget=forms.NumberInput(
-            attrs={"inputmode": "numeric", "class": "input big", "placeholder": "80"}
-        ),
-    )
-    pulse = forms.IntegerField(
-        min_value=1,
-        required=False,
-        widget=forms.NumberInput(
-            attrs={"inputmode": "numeric", "class": "input big", "placeholder": "60"}
-        ),
-    )
-    at = LocalDateTimeField(label="Measured at")
-    note = forms.CharField(max_length=200, required=False)
-    side = forms.ChoiceField(
-        label="Arm", choices=[("", "No arm"), ("left", "Left"), ("right", "Right")], required=False
-    )
-    posture = forms.ChoiceField(
-        label="Posture",
-        choices=[("", "No posture"), *[(value, value.capitalize()) for value in R.POSTURE]],
-        required=False,
-    )
-    fasted = forms.ChoiceField(
-        label="Fasting",
-        choices=[("", "Not recorded"), ("yes", "Fasted"), ("no", "Not fasted")],
-        required=False,
-    )
-
-    def __init__(self, *args, user, **kwargs):
-        self.user = user
-        super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            field.widget.attrs.setdefault("class", "input")
-        if not self.is_bound:
-            self.initial["at"] = timezone.localtime().replace(second=0, microsecond=0)
-        self.fields["at"].widget = LocalDateTimeInput(attrs={"class": "input"})
-
-    def clean(self):
-        cleaned = super().clean()
-        self.warnings = []
-        for name in ("systolic", "diastolic", "pulse"):
-            metric = R.METRICS[
-                {"systolic": "systolic_bp", "diastolic": "diastolic_bp", "pulse": "pulse"}[name]
-            ]
-            if cleaned.get(name) is not None:
-                self.warnings.extend(R.check_value(metric, cleaned[name]))
-        if (cleaned.get("systolic") is not None) != (cleaned.get("diastolic") is not None):
-            raise ValidationError("A blood pressure reading needs both numbers.")
-        return cleaned
+    def save(self, commit=True):
+        if "panel" in R.METRICS[self.cleaned_data["metric"]].use:
+            return self._save_panel()
+        instance = super().save(commit)
+        if self._editing_panel:
+            instance.components.all().delete()
+        return instance
 
     @transaction.atomic
-    def save(self):
-        at = self.cleaned_data["at"]
-        fasted = self.cleaned_data.get("fasted")
-        side = self.cleaned_data.get("side") or ""
-        posture = self.cleaned_data.get("posture") or ""
-        panel = M.Measurement.objects.create(
-            user=self.user,
-            metric="blood_pressure",
-            at=at,
-            note=self.cleaned_data.get("note") or "",
-            side=side,
-            posture=posture,
-            fasted=None if not fasted else fasted == "yes",
-        )
-        for code in ("systolic_bp", "diastolic_bp"):
+    def _save_panel(self):
+        """The panel row carries the context; one component per number carries the reading."""
+        panel = super().save(commit=False)
+        panel.metric = "blood_pressure"
+        panel.value = None
+        panel.save()
+        panel.components.all().delete()
+        for code, name in (("systolic_bp", "systolic"), ("diastolic_bp", "diastolic")):
             metric = R.METRICS[code]
             M.Measurement.objects.create(
                 user=self.user,
                 metric=code,
-                value=self.cleaned_data["systolic" if code == "systolic_bp" else "diastolic"],
+                value=self.cleaned_data[name],
                 unit=metric.unit,
-                at=at,
+                at=panel.at,
                 parent=panel,
-                # API-created readings carry the context on components too; match them.
-                side=side,
-                posture=posture,
-            )
-        if self.cleaned_data.get("pulse") is not None:
-            M.Measurement.objects.create(
-                user=self.user,
-                metric="pulse",
-                value=self.cleaned_data["pulse"],
-                unit=R.METRICS["pulse"].unit,
-                at=at,
+                side=panel.side,
+                posture=panel.posture,
             )
         return panel
 

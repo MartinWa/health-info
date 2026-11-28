@@ -210,7 +210,7 @@ def test_export_is_a_zip_of_only_the_signed_in_account(user, stranger, logged_in
     assert response.status_code == 200
     assert response["Content-Type"] == "application/zip"
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
-        payload = json.loads(archive.read("health-info-export.json"))
+        payload = json.loads(archive.read("healthinfo-export.json"))
     body = json.dumps(payload)
     assert "sentinel-other" not in body
     assert "own note" in body

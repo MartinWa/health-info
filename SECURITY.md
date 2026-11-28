@@ -10,7 +10,8 @@ API tokens are digest hashes (`sha256`, prefix lookup then `compare_digest`); th
 shown once and never stored or logged. A token carries no scopes: it can write every
 resource the API exposes for its account. Another account's id answers `404`, never `403`,
 and error messages never echo a value, dose, substance or note. `/api/v1/docs` and
-`/api/v1/openapi.json` need a session or the same bearer token. Requests over 64 KiB on
+`/api/v1/openapi.json` are public: the contract describes the shapes, never the data, and
+every call still needs a token. Requests over 64 KiB on
 `/api/v1` are rejected; there is no per-token rate limit, so `429` there comes from the
 proxy.
 
