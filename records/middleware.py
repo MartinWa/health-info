@@ -28,15 +28,23 @@ class AccountTimezoneMiddleware:
 
 
 def _error(status, code, message):
+    from records import api as A
     from records import registries as R
 
     body = {
         "error": {"code": code, "message": message, "details": []},
-        "contract_version": "1.0",
+        "contract_version": A.CONTRACT_VERSION,
         "generated_at": timezone.now().isoformat(),
         "registry_version": R.REGISTRY_VERSION,
     }
     return HttpResponse(json.dumps(body), status=status, content_type="application/json")
+
+
+def _public_document_paths():
+    """The docs and the spec are public documents: no auth, no data, no per-request change."""
+    from records.api import api
+
+    return {f"/api/v1{api.openapi_url}", f"/api/v1{api.docs_url}"}
 
 
 class ApiGuardMiddleware:
@@ -70,6 +78,17 @@ class ApiGuardMiddleware:
             )
             if allowed:
                 response["Allow"] = allowed
-        response["Cache-Control"] = "no-store"
-        response["Vary"] = "Authorization"
+        # A Set-Cookie still lives in response.cookies until the response is rendered, so both
+        # places have to be checked before the answer is allowed into a shared cache at all.
+        carries_cookie = bool(response.cookies) or response.has_header("Set-Cookie")
+        if request.path in _public_document_paths() and not carries_cookie:
+            # Only a deploy changes these, and the response holds no data. A response carrying
+            # a Set-Cookie is never shared: a cache that stored one would replay it - and the
+            # session clearing it does - to another visitor.
+            response["Cache-Control"] = "public, max-age=300"
+        else:
+            response["Cache-Control"] = "no-store"
+        # Django varies a session-aware response on its cookie; a shared cache has to key on
+        # that as well as on the token, or one visitor's answer is served to another.
+        response["Vary"] = "Cookie, Authorization"
         return response

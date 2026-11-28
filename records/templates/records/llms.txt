@@ -1,4 +1,4 @@
-# health-info
+# healthinfo
 
 One household's self-hosted health records. Authored data only: no charts, no scores, no
 device series. Version {{ app_version }}, registry version {{ registry_version }}.
@@ -19,9 +19,9 @@ Base URL: {{ base_url }}
 
 ## Reads
 
-`person`, `environment`, `periods`, `goals`, `programs`, `conditions`, `injuries`,
+`person`, `environment`, `events`, `goals`, `programs`, `conditions`, `injuries`,
 `allergies`, `medications`, `labs`, `vaccinations`, `practitioners`, `appointments`,
-`dose-events`, `measurements`, `symptoms`, `checkins`, `notes`, `memory`.
+`doses`, `measurements`, `symptoms`, `checkins`, `notes`, `memory`.
 
 Derived: `expected-doses` (one row per due slot, each with the `scheduled_for` to post back),
 `adherence` (`?medication_id&start&end`), `summary` (one compact bundle: person age, goals,
@@ -30,8 +30,8 @@ memory counts), `health`.
 
 ## Writes
 
-Writable by token: memory, notes, periods, symptoms, injuries, conditions, measurements,
-dose-events, appointments, check-ins, goals, programmes, environment.
+Writable by token: memory, notes, events, symptoms, injuries, conditions, measurements,
+doses, appointments, check-ins, goals, programmes, environment.
 
 UI-only: identity (`/person`), medication plan, allergies, labs, vaccinations, practitioners.
 
@@ -41,7 +41,7 @@ UI-only: identity (`/person`), medication plan, allergies, labs, vaccinations, p
 - Memory: read it before writing. One claim per entry, the owner's wording, no diagnoses, no
   transcripts, no third-party data. A changed claim is a new entry with `corrects_id`, not an
   edit. `locked` entries are read-only.
-- A repeated dose event with the same `medication_id` and `scheduled_for` returns the existing
+- A repeated dose with the same `medication_id` and `scheduled_for` returns the existing
   row with `200`, so a retry is safe.
 
 ## Vocabulary
@@ -49,7 +49,9 @@ UI-only: identity (`/person`), medication plan, allergies, labs, vaccinations, p
 Metric codes, enums and units are fixed in the server registry
 (`registry_version {{ registry_version }}`). Metric aliases resolve on input; responses always
 carry the canonical code. A reading outside the plausible range is stored with a `warnings`
-list; outside the hard range it is rejected.
+list; outside the hard range it is rejected. A blood pressure reading is a panel: its `value`
+is null, its `unit` is empty, and its two numbers live on `components` as `systolic_bp` then
+`diastolic_bp`. A component is found by its `metric`, never by its position in the list.
 
 ## Not this service
 

@@ -4,8 +4,8 @@ from django.contrib import admin
 
 from records.models import ApiToken
 
-admin.site.site_header = "health-info"
-admin.site.site_title = "health-info"
+admin.site.site_header = "healthinfo"
+admin.site.site_title = "healthinfo"
 admin.site.index_title = "Accounts"
 
 

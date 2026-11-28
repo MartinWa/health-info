@@ -36,7 +36,7 @@ WORK_LOAD = ("light", "moderate", "heavy", "unknown")
 TOBACCO = ("never", "former", "current")
 ALCOHOL = ("never", "occasional", "weekly", "daily")
 COOKING_FACILITIES = ("full", "basic", "none")
-PERIOD_KIND = ("travel", "illness", "work_crunch", "break", "other")
+EVENT_KIND = ("travel", "illness", "work_crunch", "break", "other")
 DATE_PRECISION = ("year", "month", "day")
 GOAL_DIRECTION = ("decrease", "increase", "maintain")
 GOAL_STATUS = ("active", "achieved", "abandoned", "paused")
@@ -219,6 +219,7 @@ UNIT_DISPLAY = {
     "mg": "mg",
     "g": "g",
     "mL": "ml",
+    "mm[Hg]": "mmHg",
     "[IU]": "IU",
     "{tablet}": "tablet",
     "{dose}": "dose",
@@ -316,10 +317,10 @@ METRICS = {
             (40, 250),
             (10, 300),
             ("log", "goal"),
-            "health-info",
+            "healthinfo",
             contexts=("fasted",),
         ),
-        _metric("blood_pressure", "", 0, None, None, ("panel",), "health-info"),
+        _metric("blood_pressure", "", 0, None, None, ("panel",), "healthinfo"),
         _metric(
             "systolic_bp",
             "mm[Hg]",
@@ -327,7 +328,7 @@ METRICS = {
             (50, 260),
             (20, 400),
             ("log",),
-            "health-info",
+            "healthinfo",
             paired="diastolic_bp",
             contexts=("posture", "side"),
         ),
@@ -338,11 +339,11 @@ METRICS = {
             (20, 160),
             (5, 250),
             ("log",),
-            "health-info",
+            "healthinfo",
             paired="systolic_bp",
             contexts=("posture", "side"),
         ),
-        _metric("pulse", "/min", 0, (25, 250), (10, 350), ("log",), "health-info"),
+        _metric("pulse", "/min", 0, (25, 250), (10, 350), ("log",), "healthinfo"),
         _metric(
             "body_fat_pct", "%", 1, (2, 70), (0.5, 85), ("log", "goal"), "external:open_wearables"
         ),

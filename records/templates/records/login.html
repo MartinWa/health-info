@@ -2,12 +2,7 @@
 {% block content %}
   <div class="auth-page">
     <div class="auth-card">
-      <div class="auth-brand">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3.5l2-5 3.5 10 2.5-5H21"/></svg>
-        </span>
-        health-info
-      </div>
+      <div class="auth-brand">health<span class="brand-info">info</span></div>
       <h1>Sign in</h1>
       <form method="post" class="record-form" novalidate>
         {% csrf_token %}

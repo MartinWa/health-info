@@ -4,8 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <meta name="theme-color" content="#f8fafc">
-    <title>{% block title %}{{ title|default:"Health info" }} · health-info{% endblock %}</title>
+    <!-- The first matching theme-color wins, so the dark page's colour has to come first: the
+         unconditional one below matches everywhere and would otherwise win in dark mode too. -->
+    <meta name="theme-color" content="#101319" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#f5f6f8">
+    <title>{% block title %}{% if title %}{{ title }} · healthinfo{% else %}healthinfo{% endif %}{% endblock %}</title>
+    <link rel="icon" href="{% static 'records/favicon.svg' %}" type="image/svg+xml">
+    <!-- ICO-only consumers (Safari, link unfurlers) ignore the SVG above. -->
+    <link rel="icon" href="{% static 'records/favicon.ico' %}" sizes="32x32">
     <link rel="preload" href="{% static 'records/fonts/inter-latin-var.woff2' %}" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="{% static 'records/app.css' %}">
     <script src="{% static 'records/app.js' %}" defer></script>
@@ -14,12 +20,7 @@
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
       <div class="header-inner">
-        <a class="brand" href="{% url 'records:dashboard' %}">
-          <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3.5l2-5 3.5 10 2.5-5H21"/></svg>
-          </span>
-          health-info
-        </a>
+        <a class="brand" href="{% url 'records:dashboard' %}">health<span class="brand-info">info</span></a>
         {% if user.is_authenticated %}
           <nav class="main-nav" aria-label="Main">
             <a href="{% url 'records:dashboard' %}"{% if request.resolver_match.url_name == "dashboard" %} aria-current="page"{% endif %}>Today</a>
@@ -57,7 +58,7 @@
                   <a href="{% url 'records:measurements_list' %}">Measurements</a>
                   <a href="{% url 'records:symptoms_list' %}">Symptoms</a>
                   <a href="{% url 'records:checkins_list' %}">Check-ins</a>
-                  <a href="{% url 'records:periods_list' %}">Periods</a>
+                  <a href="{% url 'records:events_list' %}">Events</a>
                   <a href="{% url 'records:notes_list' %}">Notes</a>
                   <a href="{% url 'records:appointments_list' %}">Appointments</a>
                   <a href="{% url 'records:labs_list' %}">Labs</a>

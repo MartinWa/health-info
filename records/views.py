@@ -45,13 +45,17 @@ def see_other(url):
 
 
 def audit(user, action, kind, object_id="", detail=None):
-    M.AuditEvent._default_manager.create(
+    M.AuditEntry._default_manager.create(
         user=user, action=action, object_kind=kind, object_id=str(object_id), detail=detail or {}
     )
 
 
 def display(obj, name):
     """Human text for one field, without ever defaulting to a raw code."""
+    if name == "value" and isinstance(obj, M.Measurement):
+        return obj.reading
+    if name == "unit" and isinstance(obj, M.Measurement):
+        return obj.unit_text or "—"
     field = obj._meta.get_field(name)
     value = getattr(obj, name)
     if value is None or value == "":
@@ -112,6 +116,8 @@ class RecordList(LoginRequiredMixin, OwnedMixin, ListView):
     columns = ()
     detail_url_name = None
     new_url_name = None
+    # Related rows the columns read, so a list of panels does not query per row.
+    prefetch = ()
     empty_text = "Nothing recorded yet."
 
     def get_queryset(self):
@@ -119,6 +125,8 @@ class RecordList(LoginRequiredMixin, OwnedMixin, ListView):
         source = self.request.GET.get("source")
         if source in R.SOURCE:
             queryset = queryset.filter(source=source)
+        if self.prefetch:
+            queryset = queryset.prefetch_related(*self.prefetch)
         return queryset
 
     def get_context_data(self, **kwargs):
@@ -152,7 +160,6 @@ class RecordDetail(LoginRequiredMixin, OwnedMixin, DetailView):
     detail_fields = ()
     edit_url_name = None
     delete_url_name = None
-    exclude_metrics = frozenset()
     detail_actions = None
 
     def get_context_data(self, **kwargs):
@@ -171,18 +178,10 @@ class RecordDetail(LoginRequiredMixin, OwnedMixin, DetailView):
             reported_by=self.object.reported_by,
             detail_actions=self.detail_actions(self.object) if self.detail_actions else [],
         )
-        components = getattr(self.object, "components", None)
-        if components is not None and components.exists():
-            context["rows"] += [
-                (display(component, "metric"), f"{display(component, 'value')} {component.unit}")
-                for component in components.all()
-            ]
         return context
 
     def _edit_url(self):
         if not self.edit_url_name:
-            return None
-        if getattr(self.object, "metric", None) in self.exclude_metrics:
             return None
         return reverse(self.edit_url_name, args=[self.object.pk])
 
@@ -220,13 +219,6 @@ class RecordUpdate(LoginRequiredMixin, OwnedMixin, UpdateView):
     template_name = "records/form.html"
     title = ""
     success_url_name = ""
-    exclude_metrics = frozenset()
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        if self.exclude_metrics:
-            queryset = queryset.exclude(metric__in=self.exclude_metrics)
-        return queryset
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -244,6 +236,12 @@ class RecordUpdate(LoginRequiredMixin, OwnedMixin, UpdateView):
 
     def get_success_url(self):
         return reverse(self.success_url_name, args=[self.object.pk])
+
+    def post(self, request, *args, **kwargs):
+        # The row this form read and the row it writes back share one transaction, so a
+        # client writing the same record cannot land in between and be overwritten by it.
+        with transaction.atomic():
+            return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
         self.object = form.save()
@@ -464,10 +462,10 @@ RESOURCES = {
             "reported_by",
         ],
     },
-    "periods": {
-        "model": M.Period,
-        "form": F.PeriodForm,
-        "title": "Periods",
+    "events": {
+        "model": M.Event,
+        "form": F.EventForm,
+        "title": "Events",
         "domain": None,
         "columns": [("Kind", "kind"), ("Start", "start"), ("End", "end")],
         "detail_fields": ["kind", "start", "end", "note", "source", "reported_by"],
@@ -476,7 +474,7 @@ RESOURCES = {
         "model": M.Measurement,
         "form": F.MeasurementForm,
         "user_filter": {"parent__isnull": True},
-        "exclude_metrics": {"blood_pressure"},
+        "prefetch": ("components",),
         "title": "Measurements",
         "domain": "measurements",
         "columns": [("At", "at"), ("Metric", "metric"), ("Value", "value"), ("Unit", "unit")],
@@ -551,7 +549,7 @@ SINGULAR = {
     "vaccinations": "vaccination",
     "practitioners": "practitioner",
     "appointments": "appointment",
-    "periods": "period",
+    "events": "event",
     "measurements": "measurement",
     "symptoms": "symptom",
     "checkins": "check-in",
@@ -574,6 +572,7 @@ def resource_views(slug, config):
             "queryset_filter": config.get("user_filter", {}),
             "new_url_name": f"{names}_new",
             "detail_url_name": f"{names}_detail",
+            "prefetch": config.get("prefetch", ()),
         },
     ).as_view()
     detail_view = type(
@@ -584,7 +583,6 @@ def resource_views(slug, config):
             "title": SINGULAR[slug].capitalize(),
             "detail_fields": config["detail_fields"],
             "queryset_filter": config.get("user_filter", {}),
-            "exclude_metrics": config.get("exclude_metrics", frozenset()),
             "edit_url_name": f"{names}_edit",
             "delete_url_name": f"{names}_delete",
             "detail_actions": staticmethod(config["detail_actions"])
@@ -612,7 +610,6 @@ def resource_views(slug, config):
             "title": f"Edit {singular}",
             "success_url_name": f"{names}_detail",
             "queryset_filter": config.get("user_filter", {}),
-            "exclude_metrics": config.get("exclude_metrics", frozenset()),
         },
     ).as_view()
     delete_view = type(
@@ -864,7 +861,6 @@ def dashboard(request):
     slots = S.planned_slots(user, today, today)
     lines = summary.domain_lines(user)
     profile = {"identity", "environment", "conditions", "allergies", "medications"}
-    measurement_form = F.BloodPressureForm(user=user)
     context = {
         "title": "Today",
         "lines": lines,
@@ -880,10 +876,7 @@ def dashboard(request):
         "slots": slots,
         "dose_groups": summary.dose_groups(slots),
         "all_taken": bool(slots) and all(slot["status"] == "taken" for slot in slots),
-        "vitals": summary.vitals(user),
         "recent": summary.recent_activity(user),
-        "measurement_form": measurement_form,
-        "measurement_at_default": _input_time(measurement_form.initial["at"]),
         "today": today,
         "greeting": _greeting(),
         "review_url": reverse("records:memory_review"),
@@ -899,11 +892,6 @@ def _greeting():
     if hour < 12:
         return "Good morning"
     return "Good afternoon" if hour < 18 else "Good evening"
-
-
-def _input_time(value):
-    """A datetime in the shape a datetime-local input posts back."""
-    return value.strftime("%Y-%m-%dT%H:%M") if value else ""
 
 
 def _singleton_form(request, form_class, instance, title, url_name, kind):
@@ -1030,31 +1018,6 @@ def quick(request):
 
 
 @login_required
-def quick_measurement(request):
-    data = request.POST.copy() if request.method == "POST" else None
-    # The page pre-fills "measured at" when it loads. A form opened later in the day still
-    # carries that old minute, so an untouched timestamp is stamped again at submission.
-    if data and data.get("at_default") and data.get("at") == data.get("at_default"):
-        data["at"] = _input_time(timezone.localtime())
-    form = F.BloodPressureForm(data, user=request.user)
-    if request.method == "POST" and form.is_valid():
-        form.save()
-        audit(request.user, "create", "records.Measurement")
-        notify_warnings(request, form)
-        messages.success(request, "Reading saved.")
-        return see_other(reverse("records:dashboard"))
-    return render(
-        request,
-        "records/measurement.html",
-        {
-            "form": form,
-            "title": "Blood pressure",
-            "at_default": _input_time(form.initial.get("at")),
-        },
-    )
-
-
-@login_required
 def quick_symptom(request):
     return quick_form(request, F.SymptomForm, "Symptom", "records.Symptom")
 
@@ -1070,8 +1033,8 @@ def quick_checkin(request):
 
 
 @login_required
-def quick_period(request):
-    return quick_form(request, F.PeriodForm, "Period", "records.Period")
+def quick_event(request):
+    return quick_form(request, F.EventForm, "Event", "records.Event")
 
 
 @login_required
@@ -1093,17 +1056,17 @@ def quick_dose(request):
         if scheduled_for and timezone.is_naive(scheduled_for):
             scheduled_for = timezone.make_aware(scheduled_for)
         if scheduled_for is None:
-            M.DoseEvent._default_manager.create(
+            M.Dose._default_manager.create(
                 user=request.user, medication=medication, status=status, at=timezone.now()
             )
         else:
-            M.DoseEvent._default_manager.get_or_create(
+            M.Dose._default_manager.get_or_create(
                 user=request.user,
                 medication=medication,
                 scheduled_for=scheduled_for,
                 defaults={"status": status, "at": timezone.now()},
             )
-        audit(request.user, "dose", "records.DoseEvent")
+        audit(request.user, "dose", "records.Dose")
         messages.success(request, "Dose logged.")
         return see_other(reverse("records:dashboard"))
     today = timezone.localdate()
@@ -1130,7 +1093,7 @@ def regimen(request):
         {
             "course": course,
             "schedule": S.describe_schedule(course.schedule),
-            "doses": course.dose_events.count(),
+            "doses": course.doses.count(),
             "detail_url": reverse("records:medications_detail", args=[course.pk]),
         }
         for course in courses
@@ -1360,7 +1323,7 @@ SPOT_MODELS = (
     (M.Measurement, "records:measurements_detail", {"parent__isnull": True}),
     (M.Symptom, "records:symptoms_detail", {}),
     (M.Checkin, "records:checkins_detail", {}),
-    (M.Period, "records:periods_detail", {}),
+    (M.Event, "records:events_detail", {}),
     (M.Appointment, "records:appointments_detail", {}),
 )
 
@@ -1514,7 +1477,7 @@ def settings_page(request):
 def audit_log(request):
     context = _paged(
         request,
-        M.AuditEvent._default_manager.filter(user=request.user),
+        M.AuditEntry._default_manager.filter(user=request.user),
         per_page=100,
         title="Audit",
     )
@@ -1525,7 +1488,7 @@ def audit_log(request):
 
 # Tokens hold credential material and the audit trail holds no records, so neither is
 # exported or purged with the health data.
-SKIPPED_MODELS = (M.ApiToken, M.AuditEvent)
+SKIPPED_MODELS = (M.ApiToken, M.AuditEntry)
 
 
 def data_models():
@@ -1561,12 +1524,12 @@ def export_data(request):
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr(
-            "health-info-export.json",
+            "healthinfo-export.json",
             json.dumps(payload, cls=DjangoJSONEncoder, indent=1),
         )
     audit(user, "export", "records", detail={"tables": len(payload["tables"])})
     response = HttpResponse(buffer.getvalue(), content_type="application/zip")
-    response["Content-Disposition"] = 'attachment; filename="health-info-export.zip"'
+    response["Content-Disposition"] = 'attachment; filename="healthinfo-export.zip"'
     response["Cache-Control"] = "no-store"
     return response
 
@@ -1584,8 +1547,8 @@ def purge(request):
         # PROTECT: dose events block their course, corrections block the claim they correct.
         memory = M.MemoryEntry._default_manager.filter(user=user)
         memory.update(corrects=None)
-        order = [M.MemoryEntry, M.DoseEvent] + [
-            model for model in data_models() if model not in (M.MemoryEntry, M.DoseEvent)
+        order = [M.MemoryEntry, M.Dose] + [
+            model for model in data_models() if model not in (M.MemoryEntry, M.Dose)
         ]
         for model in order:
             deleted, _ = model._default_manager.filter(user=user).delete()
@@ -1623,7 +1586,7 @@ SEARCH_TARGETS = (
         "records:appointments_detail",
         None,
     ),
-    (M.Period, ("note",), "records:periods_detail", None),
+    (M.Event, ("note",), "records:events_detail", None),
     (M.Checkin, ("note",), "records:checkins_detail", None),
     (
         M.Practitioner,

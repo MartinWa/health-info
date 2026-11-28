@@ -1,6 +1,7 @@
 """UI routes from the plan's §6 table, one CRUD block per resource."""
 
 from django.urls import path
+from django.views.generic import RedirectView
 
 from records import views as V
 
@@ -18,12 +19,11 @@ urlpatterns = [
     path("goals/<int:pk>/delete", V.RESOURCE_VIEWS["goals"]["delete"], name="goals_delete"),
     path("state/<slug:domain>", V.set_domain_state, name="state"),
     path("quick", V.quick, name="quick"),
-    path("quick/measurement", V.quick_measurement, name="quick_measurement"),
     path("quick/symptom", V.quick_symptom, name="quick_symptom"),
     path("quick/dose", V.quick_dose, name="quick_dose"),
     path("quick/note", V.quick_note, name="quick_note"),
     path("quick/checkin", V.quick_checkin, name="quick_checkin"),
-    path("quick/period", V.quick_period, name="quick_period"),
+    path("quick/event", V.quick_event, name="quick_event"),
     path("timeline", V.timeline, name="timeline"),
     path("regimen", V.regimen, name="regimen"),
     path("memory", V.memory_list, name="memory_list"),
@@ -67,7 +67,7 @@ for slug in (
     "vaccinations",
     "practitioners",
     "appointments",
-    "periods",
+    "events",
     "measurements",
     "symptoms",
     "checkins",
@@ -81,3 +81,27 @@ for slug in (
         path(f"{slug}/<int:pk>/edit", views["edit"], name=f"{slug}_edit"),
         path(f"{slug}/<int:pk>/delete", views["delete"], name=f"{slug}_delete"),
     ]
+
+# The rename left /periods*, /quick/period and /quick/measurement in bookmarks and links;
+# they are the same pages under their new names. The API paths stay 404 on purpose.
+for suffix, view_name in (
+    ("", "records:events_list"),
+    ("/new", "records:events_new"),
+    ("/<int:pk>", "records:events_detail"),
+    ("/<int:pk>/edit", "records:events_edit"),
+    ("/<int:pk>/delete", "records:events_delete"),
+):
+    urlpatterns += [
+        path(f"periods{suffix}", RedirectView.as_view(pattern_name=view_name, permanent=True))
+    ]
+
+urlpatterns += [
+    path(
+        "quick/period",
+        RedirectView.as_view(pattern_name="records:quick_event", permanent=True),
+    ),
+    path(
+        "quick/measurement",
+        RedirectView.as_view(pattern_name="records:measurements_new", permanent=True),
+    ),
+]

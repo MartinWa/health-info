@@ -5,15 +5,14 @@
       <span class="card-eyebrow">{{ today|date:"l j F Y" }}</span>
       <h1>{{ greeting }}</h1>
       <p class="subtitle">
-        {% if all_taken %}Everything logged for today.{% else %}Your medication, readings and profile in one place.{% endif %}
+        {% if all_taken %}Everything logged for today.{% else %}Your medication and profile in one place.{% endif %}
       </p>
     </div>
     <div class="hero-actions">
-      <a class="button" href="{% url 'records:quick_measurement' %}" data-drawer-open="measure-drawer">
+      <a class="button" href="{% url 'records:quick' %}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-        Log measurement
+        Quick add
       </a>
-      <a class="button quiet" href="{% url 'records:quick' %}">Quick add</a>
     </div>
   </div>
 
@@ -40,7 +39,7 @@
   {% endif %}
 
   <div class="bento">
-    <section class="card span-7" aria-labelledby="meds-heading">
+    <section class="card span-12" aria-labelledby="meds-heading">
       <div class="card-head">
         <div>
           <span class="card-eyebrow">Today</span>
@@ -76,40 +75,6 @@
       </div>
     </section>
 
-    <section class="card span-5" aria-labelledby="vitals-heading">
-      <div class="card-head">
-        <div>
-          <span class="card-eyebrow">Latest</span>
-          <h2 id="vitals-heading">Vitals</h2>
-        </div>
-        <a class="card-link" href="{% url 'records:measurements_list' %}">History</a>
-      </div>
-
-      {% for vital in vitals %}
-        <div class="vital">
-          <div class="vital-top">
-            <span class="vital-label">{{ vital.label }}</span>
-            {% if vital.status %}<span class="pill pill-{{ vital.status }}">{{ vital.status_label }}</span>{% endif %}
-          </div>
-          <p class="reading">{{ vital.value }}<span class="unit">{{ vital.unit }}</span></p>
-          {% if vital.sparkline %}
-            <svg class="spark" viewBox="0 0 100 32" preserveAspectRatio="none" role="img" aria-label="Recent trend">
-              <polyline points="{{ vital.sparkline }}"/>
-            </svg>
-          {% else %}
-            <div class="spark-empty" aria-hidden="true"></div>
-          {% endif %}
-          <p class="vital-meta">
-            {% if vital.at %}{{ vital.at|date:"j M" }} at {{ vital.at|time:"H:i" }}{% else %}No reading yet{% endif %}
-          </p>
-        </div>
-      {% endfor %}
-
-      <div class="actions">
-        <a class="button quiet small" href="{% url 'records:quick_measurement' %}" data-drawer-open="measure-drawer">Log reading</a>
-      </div>
-    </section>
-
     <section class="card span-7" aria-labelledby="recent-heading">
       <div class="card-head">
         <div>
@@ -129,7 +94,7 @@
             <time class="activity-time" datetime="{{ item.at|date:'c' }}">{{ item.at|date:"j M H:i" }}</time>
           </li>
         {% empty %}
-          <li class="empty">Nothing logged yet. Start with a blood pressure reading.</li>
+          <li class="empty">Nothing logged yet.</li>
         {% endfor %}
       </ul>
     </section>
@@ -203,26 +168,4 @@
       </section>
     {% endif %}
   </div>
-
-  <dialog class="drawer" id="measure-drawer" aria-labelledby="measure-title">
-    <form method="post" action="{% url 'records:quick_measurement' %}" class="drawer-form" data-dirty novalidate>
-      {% csrf_token %}
-      <div class="drawer-head">
-        <div>
-          <span class="card-eyebrow">Blood measurement</span>
-          <h2 id="measure-title">Log a reading</h2>
-        </div>
-        <button type="button" class="drawer-close" data-drawer-close aria-label="Close">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-        </button>
-      </div>
-      <div class="drawer-body">
-        {% include "records/_measurement_form.html" with form=measurement_form at_default=measurement_at_default %}
-      </div>
-      <div class="drawer-foot">
-        <button class="button" type="submit">Save reading</button>
-        <button class="button quiet" type="button" data-drawer-close>Cancel</button>
-      </div>
-    </form>
-  </dialog>
 {% endblock %}

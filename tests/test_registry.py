@@ -19,7 +19,7 @@ ENUMS = [
     R.TOBACCO,
     R.ALCOHOL,
     R.COOKING_FACILITIES,
-    R.PERIOD_KIND,
+    R.EVENT_KIND,
     R.DATE_PRECISION,
     R.GOAL_DIRECTION,
     R.GOAL_STATUS,
@@ -161,12 +161,14 @@ def test_unit_mismatch_rejects_on_a_measurement(user):
 
 
 def test_panel_without_both_components_rejects(user):
-    form = F.BloodPressureForm({"systolic": 120, "at": "2026-11-02T08:00"}, user=user)
+    form = F.MeasurementForm(
+        {"metric": "blood_pressure", "systolic": 120, "at": "2026-11-02T08:00"}, user=user
+    )
     assert not form.is_valid()
 
 
 def test_end_before_start_rejects(user):
-    form = F.PeriodForm({"kind": "travel", "start": "2026-11-05", "end": "2026-11-01"}, user=user)
+    form = F.EventForm({"kind": "travel", "start": "2026-11-05", "end": "2026-11-01"}, user=user)
     assert not form.is_valid()
 
 
@@ -187,7 +189,7 @@ def test_external_metric_goal_warns(user):
         user=user,
     )
     assert form.is_valid()
-    assert any("outside health-info" in warning for warning in form.warnings)
+    assert any("outside healthinfo" in warning for warning in form.warnings)
 
 
 def test_opposite_active_goals_warn(user):

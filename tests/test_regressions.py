@@ -1,9 +1,13 @@
 """Regression tests for findings that would otherwise repeat: delete, split, silent fields."""
 
+import importlib
 from datetime import date
 from decimal import Decimal
 
 import pytest
+from django.apps import apps
+from django.contrib.auth.models import Group, Permission
+from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
 
 from records import models as M
@@ -22,7 +26,7 @@ def test_the_owner_can_delete_their_own_row(slug, logged_in, make_row):
 def test_deleting_a_course_with_logged_doses_is_refused_cleanly(user, logged_in, course):
     medication = course(started=date(2026, 11, 2))
     medication.save()
-    M.DoseEvent._default_manager.create(
+    M.Dose._default_manager.create(
         user=user, medication=medication, status="taken", at="2026-11-02T08:00:00Z"
     )
     response = logged_in.post(reverse("records:medications_delete", args=[medication.pk]))
@@ -170,13 +174,18 @@ def test_an_outlier_is_stored_with_a_warning(user, logged_in):
 
 def test_blood_pressure_components_are_not_listed_alone(user, logged_in):
     logged_in.post(
-        reverse("records:quick_measurement"),
-        {"systolic": 120, "diastolic": 80, "pulse": 60, "at": "2026-11-02T08:00"},
+        reverse("records:measurements_new"),
+        {
+            "metric": "blood_pressure",
+            "systolic": 120,
+            "diastolic": 80,
+            "at": "2026-11-02T08:00",
+        },
     )
     panel = M.Measurement._default_manager.get(user=user, metric="blood_pressure")
     component = panel.components.first()
     listing = logged_in.get(reverse("records:measurements_list"))
-    assert len(listing.context["rows"]) == 2  # the panel and the pulse row
+    assert len(listing.context["rows"]) == 1  # the panel only; its numbers are components
     component_url = reverse("records:measurements_detail", args=[component.pk])
     assert logged_in.get(component_url).status_code == 404
     detail = logged_in.get(reverse("records:measurements_detail", args=[panel.pk]))
@@ -244,15 +253,28 @@ def test_a_stop_date_before_the_change_date_is_a_field_error(user, logged_in, co
     assert M.Medication._default_manager.filter(user=user).count() == 1
 
 
-def test_a_blood_pressure_panel_is_not_edited_with_the_scalar_form(user, logged_in, make_row):
+def test_a_panel_edit_replaces_its_components_and_keeps_the_panel(user, logged_in):
     logged_in.post(
-        reverse("records:quick_measurement"),
-        {"systolic": 120, "diastolic": 80, "at": "2026-11-02T08:00"},
+        reverse("records:measurements_new"),
+        {
+            "metric": "blood_pressure",
+            "systolic": 120,
+            "diastolic": 80,
+            "at": "2026-11-02T08:00",
+        },
     )
     panel = M.Measurement._default_manager.get(user=user, metric="blood_pressure")
-    assert logged_in.get(reverse("records:measurements_edit", args=[panel.pk])).status_code == 404
-    body = logged_in.get(reverse("records:measurements_detail", args=[panel.pk])).content.decode()
-    assert reverse("records:measurements_edit", args=[panel.pk]) not in body
+    edit_url = reverse("records:measurements_edit", args=[panel.pk])
+    form_page = logged_in.get(edit_url).content.decode()
+    assert 'value="120"' in form_page and 'value="80"' in form_page
+    response = logged_in.post(
+        edit_url,
+        {"metric": "blood_pressure", "systolic": 118, "diastolic": 78, "at": "2026-11-02T08:00"},
+    )
+    assert response.status_code == 303
+    assert panel.components.get(metric="systolic_bp").value == 118
+    assert panel.components.get(metric="diastolic_bp").value == 78
+    assert M.Measurement._default_manager.filter(user=user).count() == 3  # panel + two numbers
     delete_url = reverse("records:measurements_delete", args=[panel.pk])
     assert logged_in.post(delete_url).status_code == 303
     assert not M.Measurement._default_manager.filter(user=user).exists()
@@ -268,7 +290,7 @@ def test_prn_courses_have_a_log_button(user, logged_in, course):
             reverse("records:quick_dose"), {"medication_id": prn.pk, "status": "taken"}
         )
         assert response.status_code == 303
-    assert M.DoseEvent._default_manager.filter(user=user).count() == 2
+    assert M.Dose._default_manager.filter(user=user).count() == 2
 
 
 @pytest.fixture
@@ -292,7 +314,31 @@ def test_a_dose_logged_at_a_dst_boundary_shows_as_logged(user, saved_course, day
         schedule={"type": "daily", "times": ["02:30"]}, started=date(2026, 1, 1)
     )
     slot = S.planned_slots(user, day, day)[0]["scheduled_for"]
-    M.DoseEvent._default_manager.create(
+    M.Dose._default_manager.create(
         user=user, medication=medication, status="taken", at=slot, scheduled_for=slot
     )
     assert S.planned_slots(user, day, day)[0]["status"] == "taken"
+
+
+def test_a_retired_permission_hands_its_grants_to_the_replacement(user):
+    """Dropping the old permission row must not drop what was granted through it.
+
+    An installation that ran 0006 on its own can hold add_period beside add_event, with a user
+    or a group granted the retired one; deleting the row alone takes those grants with it.
+    """
+    migration = importlib.import_module(
+        "records.migrations.0007_dose_related_name_and_retired_permissions"
+    )
+    content_type = ContentType.objects.get_for_model(M.Event)
+    retired = Permission.objects.create(
+        content_type=content_type, codename="add_period", name="Can add period"
+    )
+    user.user_permissions.add(retired)
+    group = Group.objects.create(name="household")
+    group.permissions.add(retired)
+
+    migration.rename_permissions(apps, {"period": "event"})
+
+    assert not Permission.objects.filter(pk=retired.pk).exists()
+    assert user.user_permissions.filter(codename="add_event").exists()
+    assert group.permissions.filter(codename="add_event").exists()

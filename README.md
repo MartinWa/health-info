@@ -1,4 +1,4 @@
-# health-info
+# healthinfo
 
 One self-hosted service for one household's authored health records: a server-rendered UI,
 one SQLite file, one container, no build step. Device/series aggregation belongs to Open
@@ -12,15 +12,15 @@ Slices 1–5 of the plan's §10 build order:
   audit events, per-account timezone.
 - Medical context: conditions, injuries, allergies, medication courses with a schedule
   builder, practitioners, vaccinations, appointments.
-- Logs: measurements (blood pressure as a panel plus components), symptoms, check-ins, dose
-  events, periods, notes, timeline, derived expected doses and adherence.
+- Logs: measurements (blood pressure as a panel plus components), symptoms, check-ins,
+  doses, events, notes, timeline, derived expected doses and adherence.
 - Memory: entries, corrections with the supersede chain, pin/lock, close follow-up,
   `/memory/review` for client-written rows, promoting a symptom into an injury or condition,
   API tokens, settings and audit.
 - JSON API at `/api/v1`: bearer tokens from `/tokens`, one success envelope, page blocks,
   owner-scoped ids (`404`, never `403`), the write rules of §5, `/summary`,
-  `/expected-doses`, `/adherence`, `/health`, and `/docs` plus `/openapi.json` (session or
-  bearer). The contract is committed at `docs/api/openapi.json`; regenerate it with
+  `/expected-doses`, `/adherence`, `/health`, plus public `/docs` (Swagger) and
+  `/openapi.json`. The contract is committed at `docs/api/openapi.json`; regenerate it with
   `uv run python tools/dump_openapi.py`.
 - Labs: `/labs` lists panels, `/labs/new` adds one panel's analytes in a single form and
   pre-fills analytes, units and reference bounds from the last panel with the same name.

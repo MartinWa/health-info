@@ -5,12 +5,15 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from django.db import connection
+from django.http import HttpResponse
 from django.test import Client, RequestFactory
 from django.utils import timezone
 
 from records import api as A
 from records import models as M
 from records import registries as R
+from records.middleware import ApiGuardMiddleware
 
 
 def call(client, method, url, payload=None):
@@ -167,7 +170,7 @@ def test_a_body_id_resolves_owner_scoped(api, other_api, course):
     medication.save()
     response = post(
         other_api,
-        "/api/v1/dose-events",
+        "/api/v1/doses",
         {"medication_id": medication.pk, "status": "taken", "at": "2026-11-24T08:00:00Z"},
     )
     assert response.status_code == 404
@@ -197,12 +200,12 @@ def test_a_retried_dose_is_a_no_op(api, course):
         "at": "2026-11-24T08:30:00+01:00",
         "scheduled_for": "2026-11-24T08:00:00+01:00",
     }
-    first = post(api, "/api/v1/dose-events", payload)
+    first = post(api, "/api/v1/doses", payload)
     assert first.status_code == 201
-    again = post(api, "/api/v1/dose-events", payload)
+    again = post(api, "/api/v1/doses", payload)
     assert again.status_code == 200
     assert body(again)["id"] == body(first)["id"]
-    assert M.DoseEvent._default_manager.filter(medication=medication).count() == 1
+    assert M.Dose._default_manager.filter(medication=medication).count() == 1
 
 
 def test_expected_doses_carry_a_scheduled_slot(api, course):
@@ -222,7 +225,7 @@ def test_adherence_counts_events_on_the_day_they_happened(api, course):
         slot = doses["items"][index]
         post(
             api,
-            "/api/v1/dose-events",
+            "/api/v1/doses",
             {
                 "medication_id": medication.pk,
                 "status": status,
@@ -265,6 +268,23 @@ def test_blood_pressure_is_one_panel_with_components(api, user):
     assert call(api, "get", f"/api/v1/measurements/{component_id}").status_code == 404
     _, listed = get(api, "/api/v1/measurements?start=2026-11-01&end=2026-11-30")
     assert {item["metric"] for item in listed["items"]} == {"pulse", "blood_pressure"}
+
+
+def test_a_panel_lists_its_components_systolic_first_whatever_the_insert_order(api, user):
+    at = datetime(2026, 11, 24, 8, 0, tzinfo=UTC)
+    panel = M.Measurement._default_manager.create(user=user, metric="blood_pressure", at=at)
+    for code, value in (("diastolic_bp", 80), ("systolic_bp", 120)):
+        M.Measurement._default_manager.create(
+            user=user, metric=code, value=value, unit="mmHg", at=at, parent=panel
+        )
+    assert [part.metric for part in panel.components.all()] == ["diastolic_bp", "systolic_bp"]
+    assert [part.metric for part in panel.ordered_components()] == ["systolic_bp", "diastolic_bp"]
+    _, payload = get(api, f"/api/v1/measurements/{panel.pk}")
+    assert [part["metric"] for part in payload["components"]] == ["systolic_bp", "diastolic_bp"]
+    _, listed = get(api, "/api/v1/measurements?start=2026-11-01&end=2026-11-30")
+    assert [[part["metric"] for part in item["components"]] for item in listed["items"]] == [
+        ["systolic_bp", "diastolic_bp"]
+    ]
 
 
 def test_blood_pressure_needs_both_components(api):
@@ -442,6 +462,19 @@ def test_health_reports_versions_and_counts(api):
     assert payload["counts"]["measurements"] == 0
 
 
+def test_health_counts_doses_under_the_new_name(api, course):
+    medication = course()
+    medication.save()
+    post(
+        api,
+        "/api/v1/doses",
+        {"medication_id": medication.pk, "status": "taken", "at": "2026-11-24T08:00:00Z"},
+    )
+    _, payload = get(api, "/api/v1/health")
+    assert payload["counts"]["doses"] == 1
+    assert "dose_events" not in payload["counts"]
+
+
 def test_the_environment_singleton_carries_its_state(api):
     _, payload = get(api, "/api/v1/environment")
     assert payload["environment"]["state"] == "unknown"
@@ -458,6 +491,53 @@ def test_openapi_is_committed_and_current():
     committed = path.read_text(encoding="utf-8")
     generated = json.dumps(A.api.get_openapi_schema(), indent=2, sort_keys=True) + "\n"
     assert committed == generated, "run `uv run python tools/dump_openapi.py`"
+
+
+def test_the_docs_and_the_spec_are_public():
+    anonymous = Client()
+    spec = anonymous.get("/api/v1/openapi.json")
+    assert spec.status_code == 200
+    assert spec.json()["openapi"].startswith("3.")
+    docs = anonymous.get("/api/v1/docs")
+    assert docs.status_code == 200
+    assert "swagger" in docs.content.decode().lower()
+
+
+def test_the_public_documents_are_cacheable_and_everything_else_is_not():
+    anonymous = Client()
+    for url in ("/api/v1/docs", "/api/v1/openapi.json"):
+        response = anonymous.get(url)
+        assert response.status_code == 200, url
+        assert response["Cache-Control"] == "public, max-age=300", url
+        # The session cookie decides what a session-aware response says, so a shared cache
+        # has to key on it as well as on the token.
+        assert response["Vary"] == "Cookie, Authorization", url
+    private = anonymous.get("/api/v1/goals")
+    assert private.status_code == 401
+    assert private["Cache-Control"] == "no-store"
+
+
+def test_a_public_document_that_sets_a_cookie_is_never_shared():
+    """A cached Set-Cookie would clear another visitor's session when it was replayed."""
+
+    def respond(request):
+        response = HttpResponse("{}", content_type="application/json")
+        response.set_cookie("sessionid", "", max_age=0)
+        return response
+
+    request = RequestFactory().get("/api/v1/openapi.json")
+    response = ApiGuardMiddleware(respond)(request)
+    assert response["Cache-Control"] == "no-store"
+    assert response["Vary"] == "Cookie, Authorization"
+
+
+def test_the_removed_routes_answer_404():
+    anonymous = Client()
+    for url in ("/api/v1/periods", "/api/v1/dose-events"):
+        response = anonymous.get(url)
+        assert response.status_code == 404, url
+        assert body(response)["error"]["code"] == "not_found", url
+        assert body(response)["contract_version"] == A.CONTRACT_VERSION, url
 
 
 def test_api_has_no_bare_default_manager_calls():
@@ -480,10 +560,10 @@ def test_a_measurement_at_defaults_to_now(api):
 CREATES = {
     "/api/v1/goals": {"metric": "body_weight", "direction": "decrease", "target": 90},
     "/api/v1/programs": {"name": "sentinel-programme"},
-    "/api/v1/periods": {"kind": "travel", "start": "2026-11-02"},
+    "/api/v1/events": {"kind": "travel", "start": "2026-11-02"},
     "/api/v1/conditions": {"name": "sentinel-condition"},
     "/api/v1/injuries": {"area": "knee", "side": "left"},
-    "/api/v1/dose-events": {"at": "2026-11-24T08:00:00Z"},
+    "/api/v1/doses": {"at": "2026-11-24T08:00:00Z"},
     "/api/v1/measurements": {"metric": "pulse", "value": 60},
     "/api/v1/symptoms": {"name": "sentinel-symptom", "onset_at": "2026-11-24T09:00:00Z"},
     "/api/v1/checkins": {"at": "2026-11-24T09:00:00Z", "energy": 3},
@@ -501,7 +581,7 @@ CREATES = {
 @pytest.mark.parametrize("collection", sorted(CREATES))
 def test_each_write_route_round_trips(collection, api, user):
     payload = dict(CREATES[collection])
-    if collection == "/api/v1/dose-events":
+    if collection == "/api/v1/doses":
         payload["medication_id"] = M.Medication._default_manager.create(
             user=user,
             substance="sentinel-medication",
@@ -526,7 +606,7 @@ def test_valid_decimals_survive_input(api, course):
     medication.save()
     dose = post(
         api,
-        "/api/v1/dose-events",
+        "/api/v1/doses",
         {"medication_id": medication.pk, "at": "2026-11-24T08:00:00Z", "dose": 0.1},
     )
     assert dose.status_code == 201, dose.content
@@ -641,3 +721,32 @@ def test_an_explicit_null_for_a_non_nullable_field_is_422(api):
     assert body(response)["error"]["details"][0]["path"] == "tags"
     response = patch(api, f"/api/v1/notes/{note['id']}", {"at": None})
     assert response.status_code == 422
+
+
+def test_a_patch_builds_its_answer_before_it_releases_the_row(api, user, monkeypatch):
+    """A components list read after the commit can describe a newer version of the row.
+
+    The write is protected by the transaction, so the payload has to be built in there too -
+    otherwise a conversion landing in the gap returns a panel that owns no numbers.
+    """
+    created_panel = body(
+        post(
+            api,
+            "/api/v1/measurements",
+            {"metric": "blood_pressure", "components": {"systolic": 128, "diastolic": 82}},
+        )
+    )
+    # A test already runs inside a transaction, so the view's own block shows up as one more
+    # savepoint rather than as in_atomic_block turning true.
+    depth = len(connection.savepoint_ids)
+    seen = []
+    render = A.render
+
+    def watched(schema, obj, warnings=(), with_envelope=True):
+        seen.append(len(connection.savepoint_ids))
+        return render(schema, obj, warnings, with_envelope)
+
+    monkeypatch.setattr(A, "render", watched)
+    response = patch(api, f"/api/v1/measurements/{created_panel['id']}", {"note": "from a client"})
+    assert response.status_code == 200
+    assert seen == [depth + 1]

@@ -9,7 +9,6 @@ import hashlib
 import hmac
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from functools import wraps
 from typing import Annotated, Any
 
 from django.conf import settings
@@ -22,7 +21,7 @@ from ninja import NinjaAPI, Schema
 from ninja.errors import AuthenticationError, HttpError
 from ninja.errors import ValidationError as NinjaValidationError
 from ninja.security import HttpBearer
-from pydantic import ConfigDict, Field, PlainSerializer, create_model
+from pydantic import ConfigDict, Field, PlainSerializer, create_model, field_validator
 
 from records import models as M
 from records import registries as R
@@ -101,30 +100,24 @@ class Bearer(HttpBearer):
         return row
 
 
-def docs_guard(view):
-    """`/docs` and `/openapi.json` need a session or the same bearer token as the API."""
+class HealthInfoAPI(NinjaAPI):
+    """The public schema is fixed for the life of the process, so build it once per root path."""
 
-    @wraps(view)
-    def wrapped(request, *args, **kwargs):
-        if request.user.is_authenticated:
-            return view(request, *args, **kwargs)
-        try:
-            if Bearer()(request) is None:
-                raise AuthenticationError(message="Unauthorized.")
-        except HttpError:
-            return error_response(request, 401, "unauthorized", "Unauthorized.")
-        return view(request, *args, **kwargs)
+    _schemas = {}
 
-    return wrapped
+    def get_openapi_schema(self, *, path_prefix=None, path_params=None):
+        key = path_prefix if path_prefix is not None else self.get_root_path(path_params or {})
+        if key not in self._schemas:
+            self._schemas[key] = super().get_openapi_schema(path_prefix=key)
+        return self._schemas[key]
 
 
-api = NinjaAPI(
-    title="health-info",
+api = HealthInfoAPI(
+    title="healthinfo",
     version=CONTRACT_VERSION,
     description="One household's authored health records. Bearer token, owner-scoped.",
     urls_namespace="api",
     auth=Bearer(),
-    docs_decorator=docs_guard,
 )
 
 
@@ -164,7 +157,7 @@ def _ninja_validation(request, exc: NinjaValidationError):
 @api.exception_handler(AuthenticationError)
 def _unauthorized(request, exc: AuthenticationError):
     response = error_response(request, 401, "unauthorized", "Unauthorized.")
-    response["WWW-Authenticate"] = 'Bearer realm="health-info"'
+    response["WWW-Authenticate"] = 'Bearer realm="healthinfo"'
     return response
 
 
@@ -242,7 +235,7 @@ class ProgramOut(RecordOut):
     workout_types: list[str]
 
 
-class PeriodOut(RecordOut):
+class EventOut(RecordOut):
     kind: str
     start: date
     end: date | None = None
@@ -297,7 +290,7 @@ class MedicationOut(RecordOut):
     purpose_note: str
 
 
-class DoseEventOut(RecordOut):
+class DoseOut(RecordOut):
     medication_id: int
     status: str
     at: datetime
@@ -338,6 +331,15 @@ class ComponentOut(Schema):
     fasted: bool | None = None
 
 
+COMPONENT_ORDER = {code: index for index, code in enumerate(R.METRICS)}
+
+
+def component_rank(part) -> int:
+    """Registry position of a component, whether it arrives as a row or as a dumped dict."""
+    metric = part.get("metric") if isinstance(part, dict) else part.metric
+    return COMPONENT_ORDER.get(metric, len(COMPONENT_ORDER))
+
+
 class MeasurementOut(RecordOut):
     metric: str
     value: Number | None = None
@@ -349,6 +351,12 @@ class MeasurementOut(RecordOut):
     device: str
     note: str
     components: list[ComponentOut] = Field(default_factory=list)
+
+    @field_validator("components", mode="before")
+    @classmethod
+    def _components_in_registry_order(cls, components):
+        """Every component shares the panel's `at`, so the database order is arbitrary."""
+        return sorted(components or (), key=component_rank)
 
 
 class SymptomOut(RecordOut):
@@ -616,10 +624,10 @@ def enveloped(schema):
 
 GoalItem = enveloped(GoalOut)
 ProgramItem = enveloped(ProgramOut)
-PeriodItem = enveloped(PeriodOut)
+EventItem = enveloped(EventOut)
 ConditionItem = enveloped(ConditionOut)
 InjuryItem = enveloped(InjuryOut)
-DoseEventItem = enveloped(DoseEventOut)
+DoseItem = enveloped(DoseOut)
 MeasurementItem = enveloped(MeasurementOut)
 SymptomItem = enveloped(SymptomOut)
 CheckinItem = enveloped(CheckinOut)
@@ -685,14 +693,14 @@ class ProgramPatch(Strict):
     workout_types: list[str] | None = None
 
 
-class PeriodIn(Strict):
+class EventIn(Strict):
     kind: str
     start: date
     end: date | None = None
     note: str = ""
 
 
-class PeriodPatch(Strict):
+class EventPatch(Strict):
     kind: str | None = None
     start: date | None = None
     end: date | None = None
@@ -745,7 +753,7 @@ class InjuryPatch(Strict):
     limits: list[LimitOut] | None = None
 
 
-class DoseEventIn(Strict):
+class DoseIn(Strict):
     medication_id: int
     status: str = "taken"
     at: datetime
@@ -754,7 +762,7 @@ class DoseEventIn(Strict):
     reason: str = ""
 
 
-class DoseEventPatch(Strict):
+class DosePatch(Strict):
     status: str | None = None
     at: datetime | None = None
     dose: Decimal | None = None
@@ -956,7 +964,7 @@ def commit(obj):
 
 
 def audit(request, action, kind, object_id=""):
-    M.AuditEvent._default_manager.create(
+    M.AuditEntry._default_manager.create(
         user=user_of(request), action=action, object_kind=kind, object_id=str(object_id)
     )
 
@@ -1043,7 +1051,7 @@ def warnings_for(metric, value, path):
 def goal_warnings(user, metric, direction, status, pk=None):
     warnings = []
     if R.METRICS[metric].authority.startswith("external:"):
-        warnings.append("This metric is recorded outside health-info; the goal cannot track it.")
+        warnings.append("This metric is recorded outside healthinfo; the goal cannot track it.")
     if status == "active":
         others = M.Goal._default_manager.filter(user=user, metric=metric, status="active").exclude(
             pk=pk
@@ -1225,37 +1233,37 @@ def delete_program(request, id: int):
     return HttpResponse(status=204)
 
 
-@api.get("/periods", response=Page[PeriodOut], tags=["periods"])
-def list_periods(request, limit: int = 50, offset: int = 0):
-    return handle_list(request, M.Period, PeriodOut, limit, offset, "start", "date")
+@api.get("/events", response=Page[EventOut], tags=["events"])
+def list_events(request, limit: int = 50, offset: int = 0):
+    return handle_list(request, M.Event, EventOut, limit, offset, "start", "date")
 
 
-@api.post("/periods", response={201: PeriodItem}, tags=["periods"])
-def create_period(request, payload: PeriodIn):
-    obj = new_record(M.Period, request, payload.model_dump())
-    audit(request, "create", "records.Period", obj.pk)
-    return created(request, render(PeriodOut, obj))
+@api.post("/events", response={201: EventItem}, tags=["events"])
+def create_event(request, payload: EventIn):
+    obj = new_record(M.Event, request, payload.model_dump())
+    audit(request, "create", "records.Event", obj.pk)
+    return created(request, render(EventOut, obj))
 
 
-@api.get("/periods/{id}", response=PeriodItem, tags=["periods"])
-def get_period(request, id: int):
-    return render(PeriodOut, fetch(M.Period, request, id))
+@api.get("/events/{id}", response=EventItem, tags=["events"])
+def get_event(request, id: int):
+    return render(EventOut, fetch(M.Event, request, id))
 
 
-@api.patch("/periods/{id}", response=PeriodItem, tags=["periods"])
-def update_period(request, id: int, payload: PeriodPatch):
-    obj = fetch(M.Period, request, id)
+@api.patch("/events/{id}", response=EventItem, tags=["events"])
+def update_event(request, id: int, payload: EventPatch):
+    obj = fetch(M.Event, request, id)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(obj, field, value)
     commit(obj)
-    audit(request, "update", "records.Period", obj.pk)
-    return render(PeriodOut, obj)
+    audit(request, "update", "records.Event", obj.pk)
+    return render(EventOut, obj)
 
 
-@api.delete("/periods/{id}", response={204: None}, tags=["periods"])
-def delete_period(request, id: int):
-    fetch(M.Period, request, id).delete()
-    audit(request, "delete", "records.Period", id)
+@api.delete("/events/{id}", response={204: None}, tags=["events"])
+def delete_event(request, id: int):
+    fetch(M.Event, request, id).delete()
+    audit(request, "delete", "records.Event", id)
     return HttpResponse(status=204)
 
 
@@ -1353,47 +1361,47 @@ def _check_limits(limits):
             raise invalid_field("limits", "A limit is avoid or caution.")
 
 
-@api.get("/dose-events", response=Page[DoseEventOut], tags=["doses"])
-def list_dose_events(request, limit: int = 50, offset: int = 0):
-    return handle_list(request, M.DoseEvent, DoseEventOut, limit, offset, "at")
+@api.get("/doses", response=Page[DoseOut], tags=["doses"])
+def list_doses(request, limit: int = 50, offset: int = 0):
+    return handle_list(request, M.Dose, DoseOut, limit, offset, "at")
 
 
-@api.post("/dose-events", response={200: DoseEventItem, 201: DoseEventItem}, tags=["doses"])
-def create_dose_event(request, payload: DoseEventIn):
+@api.post("/doses", response={200: DoseItem, 201: DoseItem}, tags=["doses"])
+def create_dose(request, payload: DoseIn):
     data = payload.model_dump()
     medication = fetch(M.Medication, request, data.pop("medication_id"), path="medication_id")
     scheduled_for = data.get("scheduled_for")
     if scheduled_for is not None:
-        existing = M.DoseEvent._default_manager.filter(
+        existing = M.Dose._default_manager.filter(
             user=user_of(request), medication=medication, scheduled_for=scheduled_for
         ).first()
         if existing is not None:
             # A retried tap is a no-op, not a second dose.
-            return render(DoseEventOut, existing)
-    obj = new_record(M.DoseEvent, request, data, medication=medication)
-    audit(request, "create", "records.DoseEvent", obj.pk)
-    return created(request, render(DoseEventOut, obj))
+            return render(DoseOut, existing)
+    obj = new_record(M.Dose, request, data, medication=medication)
+    audit(request, "create", "records.Dose", obj.pk)
+    return created(request, render(DoseOut, obj))
 
 
-@api.get("/dose-events/{id}", response=DoseEventItem, tags=["doses"])
-def get_dose_event(request, id: int):
-    return render(DoseEventOut, fetch(M.DoseEvent, request, id))
+@api.get("/doses/{id}", response=DoseItem, tags=["doses"])
+def get_dose(request, id: int):
+    return render(DoseOut, fetch(M.Dose, request, id))
 
 
-@api.patch("/dose-events/{id}", response=DoseEventItem, tags=["doses"])
-def update_dose_event(request, id: int, payload: DoseEventPatch):
-    obj = fetch(M.DoseEvent, request, id)
+@api.patch("/doses/{id}", response=DoseItem, tags=["doses"])
+def update_dose(request, id: int, payload: DosePatch):
+    obj = fetch(M.Dose, request, id)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(obj, field, value)
     commit(obj)
-    audit(request, "update", "records.DoseEvent", obj.pk)
-    return render(DoseEventOut, obj)
+    audit(request, "update", "records.Dose", obj.pk)
+    return render(DoseOut, obj)
 
 
-@api.delete("/dose-events/{id}", response={204: None}, tags=["doses"])
-def delete_dose_event(request, id: int):
-    fetch(M.DoseEvent, request, id).delete()
-    audit(request, "delete", "records.DoseEvent", id)
+@api.delete("/doses/{id}", response={204: None}, tags=["doses"])
+def delete_dose(request, id: int):
+    fetch(M.Dose, request, id).delete()
+    audit(request, "delete", "records.Dose", id)
     return HttpResponse(status=204)
 
 
@@ -1536,34 +1544,44 @@ def get_measurement(request, id: int):
 
 @api.patch("/measurements/{id}", response=MeasurementItem, tags=["measurements"])
 def update_measurement(request, id: int, payload: MeasurementPatch):
-    obj = fetch(
-        M.Measurement,
-        request,
-        id,
-        queryset=M.Measurement._default_manager.filter(user=user_of(request), parent__isnull=True),
-    )
-    data = payload.model_dump(exclude_unset=True)
-    if obj.metric == "blood_pressure":
-        for field in data:
-            if field not in ("at", "note"):
-                raise invalid_field(field, "A blood pressure panel carries only its components.")
-        for field, value in data.items():
-            setattr(obj, field, value)
-        validate_fields(obj)
-        with transaction.atomic():
+    # The row is read inside the transaction that writes it back: a full-row save of a row
+    # read outside would restore the metric an edit made meanwhile had already changed, and
+    # leave a panel with no numbers. IMMEDIATE mode holds the writer lock from BEGIN, so the
+    # read cannot go stale between here and the save.
+    with transaction.atomic():
+        obj = fetch(
+            M.Measurement,
+            request,
+            id,
+            queryset=M.Measurement._default_manager.filter(
+                user=user_of(request), parent__isnull=True
+            ),
+        )
+        data = payload.model_dump(exclude_unset=True)
+        warnings = ()
+        if obj.metric == "blood_pressure":
+            for field in data:
+                if field not in ("at", "note"):
+                    raise invalid_field(
+                        field, "A blood pressure panel carries only its components."
+                    )
+            for field, value in data.items():
+                setattr(obj, field, value)
+            validate_fields(obj)
             obj.save()
             if "at" in data:
                 obj.components.update(at=obj.at)
-        audit(request, "update", "records.Measurement", obj.pk)
-        return render(MeasurementOut, obj)
-    warnings = ()
-    if data.get("value") is not None:
-        warnings = warnings_for(R.resolve_metric(obj.metric), data["value"], "value")
-    for field, value in data.items():
-        setattr(obj, field, value)
-    commit(obj)
+        else:
+            if data.get("value") is not None:
+                warnings = warnings_for(R.resolve_metric(obj.metric), data["value"], "value")
+            for field, value in data.items():
+                setattr(obj, field, value)
+            commit(obj)
+        # The answer is built here too: a components list read after the commit can already
+        # describe a newer version of the row than the one this response reports.
+        answer = render(MeasurementOut, obj, warnings)
     audit(request, "update", "records.Measurement", obj.pk)
-    return render(MeasurementOut, obj, warnings)
+    return answer
 
 
 @api.delete("/measurements/{id}", response={204: None}, tags=["measurements"])
@@ -1959,7 +1977,7 @@ def health(request):
         domain: model._default_manager.filter(user=user).count()
         for domain, model in M.DOMAIN_MODELS.items()
     }
-    counts["dose_events"] = M.DoseEvent._default_manager.filter(user=user).count()
+    counts["doses"] = M.Dose._default_manager.filter(user=user).count()
     return {
         **envelope(),
         "status": "ok",

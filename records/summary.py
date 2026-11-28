@@ -1,4 +1,4 @@
-"""Dashboard lines and the overview cards: vitals, today's doses, recent activity."""
+"""Dashboard lines and the overview cards: today's doses, recent activity."""
 
 from datetime import datetime
 
@@ -32,113 +32,6 @@ def _count(model, user, **filters):
 
 
 # --- Overview cards --------------------------------------------------------------------
-
-
-# Consumer-facing bands, not clinical guidance: source is the US ACC/AHA pressure categories.
-def _status(metric, value):
-    if value is None:
-        return None
-    value = float(value)
-    if metric == "pulse":
-        return "normal" if 60 <= value <= 100 else "borderline" if 50 <= value <= 110 else "out"
-    return None
-
-
-def _bp_status(systolic, diastolic):
-    if systolic is None or diastolic is None:
-        return None
-    if systolic >= 140 or diastolic >= 90:
-        return "out"
-    if systolic >= 120 or diastolic >= 80:
-        return "borderline"
-    return "normal"
-
-
-STATUS_LABELS = {"normal": "In range", "borderline": "Borderline", "out": "Out of range"}
-
-
-def _sparkline(values):
-    """SVG polyline points in a 100x32 box; empty when there is nothing to draw."""
-    if len(values) < 2:
-        return ""
-    low, high = min(values), max(values)
-    span = (high - low) or 1
-    step = 100 / (len(values) - 1)
-    return " ".join(
-        f"{index * step:.1f},{30 - (value - low) / span * 24:.1f}"
-        for index, value in enumerate(values)
-    )
-
-
-def _series(queryset, limit=14):
-    values = [float(row.value) for row in queryset[:limit] if row.value is not None]
-    return list(reversed(values))
-
-
-def vitals(user):
-    """Latest reading per headline metric plus a short series for its sparkline."""
-    components = M.Measurement._default_manager.filter(
-        user=user, metric__in=["systolic_bp", "diastolic_bp"], parent__isnull=False
-    )
-    systolic = components.filter(metric="systolic_bp").order_by("-at")
-    diastolic = components.filter(metric="diastolic_bp").order_by("-at")
-    latest_bp = systolic.first()
-    latest_diastolic = diastolic.first()
-    pulse = M.Measurement._default_manager.filter(user=user, metric="pulse").order_by("-at")
-    weight = M.Measurement._default_manager.filter(user=user, metric="body_weight").order_by("-at")
-    latest_pulse, latest_weight = pulse.first(), weight.first()
-
-    def card(code, label, value, unit, status, at, values):
-        return {
-            "code": code,
-            "label": label,
-            "value": value,
-            "unit": unit,
-            "status": status,
-            "status_label": STATUS_LABELS.get(status, ""),
-            "at": at,
-            "sparkline": _sparkline(values),
-        }
-
-    systolic_now = latest_bp.value if latest_bp else None
-    diastolic_now = latest_diastolic.value if latest_diastolic else None
-    return [
-        card(
-            "blood_pressure",
-            "Blood pressure",
-            f"{_number(systolic_now)}/{_number(diastolic_now)}"
-            if systolic_now is not None and diastolic_now is not None
-            else "—",
-            "mmHg",
-            _bp_status(systolic_now, diastolic_now),
-            latest_bp.at if latest_bp else None,
-            _series(systolic),
-        ),
-        card(
-            "pulse",
-            "Pulse",
-            _number(latest_pulse.value if latest_pulse else None),
-            "/min",
-            _status("pulse", latest_pulse.value if latest_pulse else None),
-            latest_pulse.at if latest_pulse else None,
-            _series(pulse),
-        ),
-        card(
-            "body_weight",
-            "Weight",
-            _number(latest_weight.value if latest_weight else None),
-            "kg",
-            None,
-            latest_weight.at if latest_weight else None,
-            _series(weight),
-        ),
-    ]
-
-
-def _number(value):
-    if value is None:
-        return "—"
-    return format(value.normalize(), "f") if hasattr(value, "normalize") else f"{value:g}"
 
 
 def dose_groups(slots):
@@ -210,18 +103,18 @@ def recent_activity(user, limit=6):
         "records:notes_detail",
     )
     add(
-        M.DoseEvent._default_manager.filter(user=user).select_related("medication"),
+        M.Dose._default_manager.filter(user=user).select_related("medication"),
         "Dose",
         lambda obj: f"{obj.medication} {obj.status}",
         None,
     )
-    for period in M.Period._default_manager.filter(user=user).order_by("-start")[:limit]:
+    for event in M.Event._default_manager.filter(user=user).order_by("-start")[:limit]:
         items.append(
             {
-                "at": timezone.make_aware(datetime.combine(period.start, datetime.min.time())),
-                "kind": "Period",
-                "text": f"{period.get_kind_display()} {period.start}",
-                "url": reverse("records:periods_detail", args=[period.pk]),
+                "at": timezone.make_aware(datetime.combine(event.start, datetime.min.time())),
+                "kind": "Event",
+                "text": f"{event.get_kind_display()} {event.start}",
+                "url": reverse("records:events_detail", args=[event.pk]),
             }
         )
     items.sort(key=lambda item: item["at"], reverse=True)
@@ -233,13 +126,8 @@ def _title(code):
 
 
 def _measurement_text(obj):
-    """A blood pressure panel stores no value of its own; read its two components."""
-    if obj.metric == "blood_pressure":
-        parts = {part.metric: part.value for part in obj.components.all()}
-        if "systolic_bp" in parts and "diastolic_bp" in parts:
-            systolic, diastolic = _number(parts["systolic_bp"]), _number(parts["diastolic_bp"])
-            return f"Blood pressure {systolic}/{diastolic}"
-    return f"{_title(obj.metric)} {_number(obj.value)} {obj.unit}".strip()
+    """One reading, whatever shape it is stored in: a panel reads from its components."""
+    return f"{_title(obj.metric)} {obj.reading} {obj.unit_text}".strip()
 
 
 def _last(value):

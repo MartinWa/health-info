@@ -15,6 +15,11 @@ from django.utils import timezone
 from records import registries as R
 
 
+def _plain(value):
+    """A Decimal as plain digits: no exponent, no trailing zeros."""
+    return format(value.normalize(), "f")
+
+
 class Source:
     OWNER, CLIENT, IMPORT, DEVICE = R.SOURCE
 
@@ -144,7 +149,7 @@ class ApiToken(models.Model):
         self.save(update_fields=["revoked_at"])
 
 
-class AuditEvent(models.Model):
+class AuditEntry(models.Model):
     """Counts and file names only; never a value, an attempted name or a token prefix."""
 
     user = models.ForeignKey(
@@ -245,8 +250,8 @@ class Program(OwnedRecord):
         return self.name
 
 
-class Period(OwnedRecord):
-    kind = models.CharField(max_length=12, choices=R.choices(R.PERIOD_KIND))
+class Event(OwnedRecord):
+    kind = models.CharField(max_length=12, choices=R.choices(R.EVENT_KIND))
     start = models.DateField()
     end = models.DateField(null=True, blank=True)
     note = models.CharField(max_length=200, blank=True)
@@ -256,7 +261,7 @@ class Period(OwnedRecord):
         constraints = [
             models.CheckConstraint(
                 condition=Q(end__gte=F("start")) | Q(end__isnull=True),
-                name="period_end_after_start",
+                name="event_end_after_start",
             )
         ]
 
@@ -391,8 +396,8 @@ class Medication(OwnedRecord):
         return self.stopped is None
 
 
-class DoseEvent(OwnedRecord):
-    medication = models.ForeignKey(Medication, on_delete=models.PROTECT, related_name="dose_events")
+class Dose(OwnedRecord):
+    medication = models.ForeignKey(Medication, on_delete=models.PROTECT, related_name="doses")
     status = models.CharField(max_length=8, choices=R.choices(R.DOSE_STATUS), default="taken")
     at = models.DateTimeField()
     scheduled_for = models.DateTimeField(null=True, blank=True)
@@ -488,16 +493,59 @@ class Measurement(OwnedRecord):
 
     def clean(self):
         metric = R.resolve_metric(self.metric)
-        if "log" not in metric.use:
+        if not {"log", "panel"} & metric.use:
             raise ValidationError({"metric": "This metric cannot be measured."})
         self.metric = metric.code
+        # Before the panel branch returns: a component's owner is validated too.
+        if self.parent and self.parent.user_id != self.user_id:
+            raise ValidationError({"parent": "Unknown measurement."})
+        if "panel" in metric.use:
+            # A panel carries no number of its own: its components hold the reading.
+            if self.value is not None:
+                raise ValidationError({"value": "A panel reading has no single value."})
+            self.unit = ""
+            return
         if self.value is not None:
             self.value = Decimal(self.value).quantize(Decimal(1).scaleb(-metric.digits))
         if self.unit and self.unit != metric.unit:
             raise ValidationError({"unit": "Unit does not match the metric."})
         self.unit = metric.unit
-        if self.parent and self.parent.user_id != self.user_id:
-            raise ValidationError({"parent": "Unknown measurement."})
+
+    @property
+    def is_panel(self):
+        """A reading of two numbers, stored as this row plus one component per number."""
+        metric = R.METRICS.get(self.metric)
+        return metric is not None and "panel" in metric.use
+
+    def components_by_metric(self):
+        return {part.metric: part.value for part in self.components.all()}
+
+    def ordered_components(self):
+        """Components in registry order, so systolic_bp leads its own panel."""
+        order = {code: index for index, code in enumerate(R.METRICS)}
+        parts = list(self.components.all())
+        return sorted(parts, key=lambda part: order.get(part.metric, len(order)))
+
+    @property
+    def reading(self):
+        """`120/80` for a panel, the plain number otherwise; `—` when nothing is recorded."""
+        if self.is_panel:
+            parts = self.components_by_metric()
+            numbers = [parts.get("systolic_bp"), parts.get("diastolic_bp")]
+        else:
+            numbers = [self.value]
+        if any(number is None for number in numbers):
+            return "—"
+        return "/".join(_plain(number) for number in numbers)
+
+    @property
+    def unit_text(self):
+        """`mmHg` for a panel, whose own unit column is empty; the stored unit otherwise."""
+        if self.is_panel:
+            unit = R.METRICS["systolic_bp"].unit
+        else:
+            unit = self.unit
+        return R.UNIT_DISPLAY.get(unit, unit)
 
     def __str__(self):
         return f"{self.metric} {self.value if self.value is not None else ''}".strip()
