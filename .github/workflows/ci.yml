@@ -131,10 +131,12 @@ jobs:
           push: false
           provenance: false
           tags: health-info:ci
-          no-cache: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-          # The OS layer upgrades Debian packages, so a cached copy goes stale and Trivy
-          # reports CVEs whose fixed version has since shipped. Rebuild just that stage.
-          no-cache-filters: os-base
+          # Built from scratch every time: the os-base stage runs apt-get upgrade, so a
+          # cached layer keeps serving packages whose fixed point release has shipped, and
+          # Trivy then fails the audit on CVEs that are already patched upstream. Bypassing
+          # only that stage is not enough, because the stages above it are restored from
+          # cache. A fresh build also refreshes the cache that release.yml consumes.
+          no-cache: true
           cache-from: type=gha,scope=ci-production
           cache-to: type=gha,scope=ci-production,mode=max
           github-token: ""
