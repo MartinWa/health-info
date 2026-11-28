@@ -132,6 +132,9 @@ jobs:
           provenance: false
           tags: health-info:ci
           no-cache: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+          # The OS layer upgrades Debian packages, so a cached copy goes stale and Trivy
+          # reports CVEs whose fixed version has since shipped. Rebuild just that stage.
+          no-cache-filters: os-base
           cache-from: type=gha,scope=ci-production
           cache-to: type=gha,scope=ci-production,mode=max
           github-token: ""
