@@ -533,7 +533,10 @@ class MeasurementForm(OwnerForm):
                 value = parts.get(code)
                 self.initial[name] = None if value is None else int(value)
         if not self.is_bound and not self.instance.pk:
-            self.initial["at_default"] = self.initial["at"].strftime("%Y-%m-%dT%H:%M")
+            # The hidden default carries exactly what the visible input shows, in whatever
+            # format that field renders in, so a browser that submits it back untouched
+            # matches it and the stale-minute check below can fire.
+            self.initial["at_default"] = self.fields["at"].widget.format_value(self.initial["at"])
 
     def clean_metric(self):
         return R.resolve_metric(self.cleaned_data["metric"]).code

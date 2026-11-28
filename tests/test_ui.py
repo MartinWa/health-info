@@ -375,6 +375,18 @@ def test_an_untouched_measurement_time_is_stamped_again_at_submission(user, logg
     assert abs(panel.at - timezone.now()) < timedelta(minutes=2)
 
 
+def test_the_hidden_time_matches_what_the_visible_field_shows(user, logged_in):
+    """A browser posts the visible value back verbatim, so the two strings must be identical.
+
+    The stale-minute check compares them as strings, so a hidden default in one format and an
+    input in another makes the check silently never fire.
+    """
+    body = logged_in.get(reverse("records:measurements_new")).content.decode()
+    shown = re.search(r'<input[^>]*name="at"[^>]*value="([^"]*)"', body).group(1)
+    hidden = re.search(r'<input[^>]*name="at_default"[^>]*value="([^"]*)"', body).group(1)
+    assert hidden == shown
+
+
 def test_a_chosen_measurement_time_is_kept(user, logged_in):
     chosen = "2026-11-02T08:00"
     response = logged_in.post(
