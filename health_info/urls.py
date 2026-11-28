@@ -20,8 +20,9 @@ urlpatterns = [
         name="password",
     ),
     path("admin/", admin.site.urls),
-    # Browsers and link unfurlers ask for this path even with a <link rel="icon">.
-    path("favicon.ico", RedirectView.as_view(url=static("records/favicon.svg"), permanent=True)),
+    # Browsers and link unfurlers ask for this path even with a <link rel="icon">, and the ones
+    # that cannot read an SVG need the raster icon the redirect points at.
+    path("favicon.ico", RedirectView.as_view(url=static("records/favicon.ico"), permanent=True)),
     # Anonymous root probe: no health data, no account data.
     path("healthz", healthz, name="healthz"),
 ]

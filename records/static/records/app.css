@@ -63,6 +63,9 @@
     --accent-ink: #3b0764;
     --accent-soft: #2a0e2e;
     --accent-line: #86198f;
+    /* Its own token, because the ring has to clear 3:1 against the page: the light accent is
+       too dark on a dark surface, the dark accent is the value that does. */
+    --focus: #e879f9;
     --ok-bg: #07271c;
     --ok-ink: #6ee7b7;
     --warn-bg: #2b1f08;

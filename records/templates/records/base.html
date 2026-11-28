@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#f5f6f8">
-    <title>{% block title %}{{ title|default:"Today" }} · healthinfo{% endblock %}</title>
+    <!-- The page turns #101319 in dark mode, so the status bar must follow it there. -->
+    <meta name="theme-color" content="#101319" media="(prefers-color-scheme: dark)">
+    <title>{% block title %}{% if title %}{{ title }} · healthinfo{% else %}healthinfo{% endif %}{% endblock %}</title>
     <link rel="icon" href="{% static 'records/favicon.svg' %}" type="image/svg+xml">
+    <!-- ICO-only consumers (Safari, link unfurlers) ignore the SVG above. -->
+    <link rel="icon" href="{% static 'records/favicon.ico' %}" sizes="32x32">
     <link rel="preload" href="{% static 'records/fonts/inter-latin-var.woff2' %}" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="{% static 'records/app.css' %}">
     <script src="{% static 'records/app.js' %}" defer></script>

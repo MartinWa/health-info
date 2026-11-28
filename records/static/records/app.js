@@ -17,7 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Dirty-form guard: leaving a half-filled form asks first.
-  const form = document.querySelector('form.record-form[method="post"], form[data-dirty][method="post"]');
+  const form = document.querySelector('form.record-form[method="post"]');
   if (!form) return;
   const snapshot = () => new URLSearchParams(new FormData(form)).toString();
   const initial = snapshot();
