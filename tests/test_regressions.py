@@ -337,7 +337,7 @@ def test_a_retired_permission_hands_its_grants_to_the_replacement(user):
     group = Group.objects.create(name="household")
     group.permissions.add(retired)
 
-    migration.rename_permissions(apps, {"period": "event"})
+    migration.rename_permissions(apps, {"period": "event"}, "default")
 
     assert not Permission.objects.filter(pk=retired.pk).exists()
     assert user.user_permissions.filter(codename="add_event").exists()

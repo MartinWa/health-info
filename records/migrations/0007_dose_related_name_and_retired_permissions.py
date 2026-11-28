@@ -14,17 +14,19 @@ RETIRED = {"period": "event", "doseevent": "dose", "auditevent": "auditentry"}
 ACTIONS = ("add", "change", "delete", "view")
 
 
-def rename_permissions(apps, pairs):
+def rename_permissions(apps, pairs, alias):
     """Move each retired codename to its new name, dropping it only once its grants are safe."""
     Permission = apps.get_model("auth", "Permission")
     User = apps.get_model(settings.AUTH_USER_MODEL)
     Group = apps.get_model("auth", "Group")
     for old, new in pairs.items():
         for action in ACTIONS:
-            for row in Permission.objects.filter(codename=f"{action}_{old}"):
-                taken = Permission.objects.filter(
-                    content_type_id=row.content_type_id, codename=f"{action}_{new}"
-                ).first()
+            for row in Permission.objects.using(alias).filter(codename=f"{action}_{old}"):
+                taken = (
+                    Permission.objects.using(alias)
+                    .filter(content_type_id=row.content_type_id, codename=f"{action}_{new}")
+                    .first()
+                )
                 if taken is None:
                     row.codename = f"{action}_{new}"
                     row.save(update_fields=["codename"])
@@ -32,19 +34,21 @@ def rename_permissions(apps, pairs):
                 # The new row already exists, so the old one is dropped - but it may be the one
                 # a user or a group was granted, and deleting it takes those assignments with
                 # it. Hand them over first.
-                for user in User.objects.filter(user_permissions=row):
+                for user in User.objects.using(alias).filter(user_permissions=row):
                     user.user_permissions.add(taken)
-                for group in Group.objects.filter(permissions=row):
+                for group in Group.objects.using(alias).filter(permissions=row):
                     group.permissions.add(taken)
                 row.delete()
 
 
 def retire_permissions(apps, schema_editor):
-    rename_permissions(apps, RETIRED)
+    rename_permissions(apps, RETIRED, schema_editor.connection.alias)
 
 
 def restore_permissions(apps, schema_editor):
-    rename_permissions(apps, {new: old for old, new in RETIRED.items()})
+    rename_permissions(
+        apps, {new: old for old, new in RETIRED.items()}, schema_editor.connection.alias
+    )
 
 
 class Migration(migrations.Migration):

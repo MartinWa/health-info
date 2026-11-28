@@ -12,6 +12,11 @@ TEST_DATA_DIR = Path(os.environ.get("HEALTH_INFO_TEST_DATA_DIR") or BASE_DIR / "
 TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
 DATABASES["default"]["NAME"] = TEST_DATA_DIR / "db.sqlite3"
 DATABASES["default"]["TEST"] = {"NAME": TEST_DATA_DIR / "test.sqlite3"}
+DATABASES["other"] = {
+    **DATABASES["default"],
+    "NAME": TEST_DATA_DIR / "other.sqlite3",
+    "TEST": {"NAME": TEST_DATA_DIR / "test-other.sqlite3"},
+}
 SECRET_KEY = "synthetic-test-secret-not-for-real-installations-" * 2
 DEBUG = False
 ALLOWED_HOSTS = ["testserver", "localhost", "127.0.0.1"]
