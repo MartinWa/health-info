@@ -432,9 +432,9 @@ class AppointmentForm(OwnerForm):
         ]
 
 
-class PeriodForm(OwnerForm):
+class EventForm(OwnerForm):
     class Meta:
-        model = M.Period
+        model = M.Event
         fields = ["kind", "start", "end", "note"]
 
 

@@ -45,7 +45,7 @@ def see_other(url):
 
 
 def audit(user, action, kind, object_id="", detail=None):
-    M.AuditEvent._default_manager.create(
+    M.AuditEntry._default_manager.create(
         user=user, action=action, object_kind=kind, object_id=str(object_id), detail=detail or {}
     )
 
@@ -456,10 +456,10 @@ RESOURCES = {
             "reported_by",
         ],
     },
-    "periods": {
-        "model": M.Period,
-        "form": F.PeriodForm,
-        "title": "Periods",
+    "events": {
+        "model": M.Event,
+        "form": F.EventForm,
+        "title": "Events",
         "domain": None,
         "columns": [("Kind", "kind"), ("Start", "start"), ("End", "end")],
         "detail_fields": ["kind", "start", "end", "note", "source", "reported_by"],
@@ -543,7 +543,7 @@ SINGULAR = {
     "vaccinations": "vaccination",
     "practitioners": "practitioner",
     "appointments": "appointment",
-    "periods": "period",
+    "events": "event",
     "measurements": "measurement",
     "symptoms": "symptom",
     "checkins": "check-in",
@@ -1027,8 +1027,8 @@ def quick_checkin(request):
 
 
 @login_required
-def quick_period(request):
-    return quick_form(request, F.PeriodForm, "Period", "records.Period")
+def quick_event(request):
+    return quick_form(request, F.EventForm, "Event", "records.Event")
 
 
 @login_required
@@ -1050,17 +1050,17 @@ def quick_dose(request):
         if scheduled_for and timezone.is_naive(scheduled_for):
             scheduled_for = timezone.make_aware(scheduled_for)
         if scheduled_for is None:
-            M.DoseEvent._default_manager.create(
+            M.Dose._default_manager.create(
                 user=request.user, medication=medication, status=status, at=timezone.now()
             )
         else:
-            M.DoseEvent._default_manager.get_or_create(
+            M.Dose._default_manager.get_or_create(
                 user=request.user,
                 medication=medication,
                 scheduled_for=scheduled_for,
                 defaults={"status": status, "at": timezone.now()},
             )
-        audit(request.user, "dose", "records.DoseEvent")
+        audit(request.user, "dose", "records.Dose")
         messages.success(request, "Dose logged.")
         return see_other(reverse("records:dashboard"))
     today = timezone.localdate()
@@ -1317,7 +1317,7 @@ SPOT_MODELS = (
     (M.Measurement, "records:measurements_detail", {"parent__isnull": True}),
     (M.Symptom, "records:symptoms_detail", {}),
     (M.Checkin, "records:checkins_detail", {}),
-    (M.Period, "records:periods_detail", {}),
+    (M.Event, "records:events_detail", {}),
     (M.Appointment, "records:appointments_detail", {}),
 )
 
@@ -1471,7 +1471,7 @@ def settings_page(request):
 def audit_log(request):
     context = _paged(
         request,
-        M.AuditEvent._default_manager.filter(user=request.user),
+        M.AuditEntry._default_manager.filter(user=request.user),
         per_page=100,
         title="Audit",
     )
@@ -1482,7 +1482,7 @@ def audit_log(request):
 
 # Tokens hold credential material and the audit trail holds no records, so neither is
 # exported or purged with the health data.
-SKIPPED_MODELS = (M.ApiToken, M.AuditEvent)
+SKIPPED_MODELS = (M.ApiToken, M.AuditEntry)
 
 
 def data_models():
@@ -1541,8 +1541,8 @@ def purge(request):
         # PROTECT: dose events block their course, corrections block the claim they correct.
         memory = M.MemoryEntry._default_manager.filter(user=user)
         memory.update(corrects=None)
-        order = [M.MemoryEntry, M.DoseEvent] + [
-            model for model in data_models() if model not in (M.MemoryEntry, M.DoseEvent)
+        order = [M.MemoryEntry, M.Dose] + [
+            model for model in data_models() if model not in (M.MemoryEntry, M.Dose)
         ]
         for model in order:
             deleted, _ = model._default_manager.filter(user=user).delete()
@@ -1580,7 +1580,7 @@ SEARCH_TARGETS = (
         "records:appointments_detail",
         None,
     ),
-    (M.Period, ("note",), "records:periods_detail", None),
+    (M.Event, ("note",), "records:events_detail", None),
     (M.Checkin, ("note",), "records:checkins_detail", None),
     (
         M.Practitioner,

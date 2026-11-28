@@ -406,8 +406,8 @@ def test_audit_holds_no_health_values(user, logged_in):
     )
     body = logged_in.get(reverse("records:audit")).content.decode()
     assert sentinel not in body
-    assert all(sentinel not in str(event.detail) for event in M.AuditEvent._default_manager.all())
-    assert M.AuditEvent._default_manager.filter(action="create").exists()
+    assert all(sentinel not in str(event.detail) for event in M.AuditEntry._default_manager.all())
+    assert M.AuditEntry._default_manager.filter(action="create").exists()
 
 
 def test_tokens_are_owner_scoped(user, other_client):

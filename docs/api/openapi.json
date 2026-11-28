@@ -1520,7 +1520,7 @@
         "title": "ContextIn",
         "type": "object"
       },
-      "DoseEventIn": {
+      "DoseIn": {
         "additionalProperties": false,
         "properties": {
           "at": {
@@ -1573,10 +1573,10 @@
           "medication_id",
           "at"
         ],
-        "title": "DoseEventIn",
+        "title": "DoseIn",
         "type": "object"
       },
-      "DoseEventOut": {
+      "DoseOut": {
         "properties": {
           "at": {
             "format": "date-time",
@@ -1659,10 +1659,10 @@
           "at",
           "reason"
         ],
-        "title": "DoseEventOut",
+        "title": "DoseOut",
         "type": "object"
       },
-      "DoseEventOutItem": {
+      "DoseOutItem": {
         "properties": {
           "at": {
             "format": "date-time",
@@ -1761,10 +1761,10 @@
           "at",
           "reason"
         ],
-        "title": "DoseEventOutItem",
+        "title": "DoseOutItem",
         "type": "object"
       },
-      "DoseEventPatch": {
+      "DosePatch": {
         "additionalProperties": false,
         "properties": {
           "at": {
@@ -1816,7 +1816,7 @@
             "title": "Status"
           }
         },
-        "title": "DoseEventPatch",
+        "title": "DosePatch",
         "type": "object"
       },
       "EnvironmentEnvelope": {
@@ -2101,6 +2101,252 @@
           }
         },
         "title": "EnvironmentPatch",
+        "type": "object"
+      },
+      "EventIn": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "title": "Note",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "start"
+        ],
+        "title": "EventIn",
+        "type": "object"
+      },
+      "EventOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "reported_by",
+          "created_at",
+          "updated_at",
+          "kind",
+          "start",
+          "note"
+        ],
+        "title": "EventOut",
+        "type": "object"
+      },
+      "EventOutItem": {
+        "properties": {
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          },
+          "reported_by": {
+            "title": "Reported By",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_version",
+          "generated_at",
+          "registry_version",
+          "id",
+          "source",
+          "reported_by",
+          "created_at",
+          "updated_at",
+          "kind",
+          "start",
+          "note"
+        ],
+        "title": "EventOutItem",
+        "type": "object"
+      },
+      "EventPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          }
+        },
+        "title": "EventPatch",
         "type": "object"
       },
       "ExpectedDoseOut": {
@@ -4659,7 +4905,7 @@
         "title": "Page[ConditionOut]",
         "type": "object"
       },
-      "Page_DoseEventOut_": {
+      "Page_DoseOut_": {
         "properties": {
           "contract_version": {
             "title": "Contract Version",
@@ -4680,7 +4926,7 @@
           },
           "items": {
             "items": {
-              "$ref": "#/components/schemas/DoseEventOut"
+              "$ref": "#/components/schemas/DoseOut"
             },
             "title": "Items",
             "type": "array"
@@ -4708,7 +4954,59 @@
           "generated_at",
           "registry_version"
         ],
-        "title": "Page[DoseEventOut]",
+        "title": "Page[DoseOut]",
+        "type": "object"
+      },
+      "Page_EventOut_": {
+        "properties": {
+          "contract_version": {
+            "title": "Contract Version",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EventOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "registry_version": {
+            "title": "Registry Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "count",
+          "limit",
+          "offset",
+          "has_more",
+          "contract_version",
+          "generated_at",
+          "registry_version"
+        ],
+        "title": "Page[EventOut]",
         "type": "object"
       },
       "Page_ExpectedDoseOut_": {
@@ -5127,58 +5425,6 @@
         "title": "Page[NoteOut]",
         "type": "object"
       },
-      "Page_PeriodOut_": {
-        "properties": {
-          "contract_version": {
-            "title": "Contract Version",
-            "type": "string"
-          },
-          "count": {
-            "title": "Count",
-            "type": "integer"
-          },
-          "generated_at": {
-            "format": "date-time",
-            "title": "Generated At",
-            "type": "string"
-          },
-          "has_more": {
-            "title": "Has More",
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/PeriodOut"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "limit": {
-            "title": "Limit",
-            "type": "integer"
-          },
-          "offset": {
-            "title": "Offset",
-            "type": "integer"
-          },
-          "registry_version": {
-            "title": "Registry Version",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "items",
-          "count",
-          "limit",
-          "offset",
-          "has_more",
-          "contract_version",
-          "generated_at",
-          "registry_version"
-        ],
-        "title": "Page[PeriodOut]",
-        "type": "object"
-      },
       "Page_PractitionerOut_": {
         "properties": {
           "contract_version": {
@@ -5385,252 +5631,6 @@
           "registry_version"
         ],
         "title": "Page[VaccinationOut]",
-        "type": "object"
-      },
-      "PeriodIn": {
-        "additionalProperties": false,
-        "properties": {
-          "end": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "End"
-          },
-          "kind": {
-            "title": "Kind",
-            "type": "string"
-          },
-          "note": {
-            "default": "",
-            "title": "Note",
-            "type": "string"
-          },
-          "start": {
-            "format": "date",
-            "title": "Start",
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind",
-          "start"
-        ],
-        "title": "PeriodIn",
-        "type": "object"
-      },
-      "PeriodOut": {
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "end": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "End"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "kind": {
-            "title": "Kind",
-            "type": "string"
-          },
-          "note": {
-            "title": "Note",
-            "type": "string"
-          },
-          "reported_by": {
-            "title": "Reported By",
-            "type": "string"
-          },
-          "source": {
-            "title": "Source",
-            "type": "string"
-          },
-          "start": {
-            "format": "date",
-            "title": "Start",
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Warnings",
-            "type": "array"
-          }
-        },
-        "required": [
-          "id",
-          "source",
-          "reported_by",
-          "created_at",
-          "updated_at",
-          "kind",
-          "start",
-          "note"
-        ],
-        "title": "PeriodOut",
-        "type": "object"
-      },
-      "PeriodOutItem": {
-        "properties": {
-          "contract_version": {
-            "title": "Contract Version",
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "end": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "End"
-          },
-          "generated_at": {
-            "format": "date-time",
-            "title": "Generated At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "kind": {
-            "title": "Kind",
-            "type": "string"
-          },
-          "note": {
-            "title": "Note",
-            "type": "string"
-          },
-          "registry_version": {
-            "title": "Registry Version",
-            "type": "integer"
-          },
-          "reported_by": {
-            "title": "Reported By",
-            "type": "string"
-          },
-          "source": {
-            "title": "Source",
-            "type": "string"
-          },
-          "start": {
-            "format": "date",
-            "title": "Start",
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Warnings",
-            "type": "array"
-          }
-        },
-        "required": [
-          "contract_version",
-          "generated_at",
-          "registry_version",
-          "id",
-          "source",
-          "reported_by",
-          "created_at",
-          "updated_at",
-          "kind",
-          "start",
-          "note"
-        ],
-        "title": "PeriodOutItem",
-        "type": "object"
-      },
-      "PeriodPatch": {
-        "additionalProperties": false,
-        "properties": {
-          "end": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "End"
-          },
-          "kind": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Kind"
-          },
-          "note": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          },
-          "start": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Start"
-          }
-        },
-        "title": "PeriodPatch",
         "type": "object"
       },
       "PersonEnvelope": {
@@ -7740,9 +7740,9 @@
         ]
       }
     },
-    "/api/v1/dose-events": {
+    "/api/v1/doses": {
       "get": {
-        "operationId": "records_api_list_dose_events",
+        "operationId": "records_api_list_doses",
         "parameters": [
           {
             "in": "query",
@@ -7770,7 +7770,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_DoseEventOut_"
+                  "$ref": "#/components/schemas/Page_DoseOut_"
                 }
               }
             },
@@ -7782,19 +7782,19 @@
             "Bearer": []
           }
         ],
-        "summary": "List Dose Events",
+        "summary": "List Doses",
         "tags": [
           "doses"
         ]
       },
       "post": {
-        "operationId": "records_api_create_dose_event",
+        "operationId": "records_api_create_dose",
         "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DoseEventIn"
+                "$ref": "#/components/schemas/DoseIn"
               }
             }
           },
@@ -7805,7 +7805,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoseEventOutItem"
+                  "$ref": "#/components/schemas/DoseOutItem"
                 }
               }
             },
@@ -7815,7 +7815,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoseEventOutItem"
+                  "$ref": "#/components/schemas/DoseOutItem"
                 }
               }
             },
@@ -7827,15 +7827,15 @@
             "Bearer": []
           }
         ],
-        "summary": "Create Dose Event",
+        "summary": "Create Dose",
         "tags": [
           "doses"
         ]
       }
     },
-    "/api/v1/dose-events/{id}": {
+    "/api/v1/doses/{id}": {
       "delete": {
-        "operationId": "records_api_delete_dose_event",
+        "operationId": "records_api_delete_dose",
         "parameters": [
           {
             "in": "path",
@@ -7857,13 +7857,13 @@
             "Bearer": []
           }
         ],
-        "summary": "Delete Dose Event",
+        "summary": "Delete Dose",
         "tags": [
           "doses"
         ]
       },
       "get": {
-        "operationId": "records_api_get_dose_event",
+        "operationId": "records_api_get_dose",
         "parameters": [
           {
             "in": "path",
@@ -7880,7 +7880,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoseEventOutItem"
+                  "$ref": "#/components/schemas/DoseOutItem"
                 }
               }
             },
@@ -7892,13 +7892,13 @@
             "Bearer": []
           }
         ],
-        "summary": "Get Dose Event",
+        "summary": "Get Dose",
         "tags": [
           "doses"
         ]
       },
       "patch": {
-        "operationId": "records_api_update_dose_event",
+        "operationId": "records_api_update_dose",
         "parameters": [
           {
             "in": "path",
@@ -7914,7 +7914,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DoseEventPatch"
+                "$ref": "#/components/schemas/DosePatch"
               }
             }
           },
@@ -7925,7 +7925,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoseEventOutItem"
+                  "$ref": "#/components/schemas/DoseOutItem"
                 }
               }
             },
@@ -7937,7 +7937,7 @@
             "Bearer": []
           }
         ],
-        "summary": "Update Dose Event",
+        "summary": "Update Dose",
         "tags": [
           "doses"
         ]
@@ -8002,6 +8002,199 @@
         "summary": "Patch Environment",
         "tags": [
           "context"
+        ]
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "operationId": "records_api_list_events",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_EventOut_"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "List Events",
+        "tags": [
+          "events"
+        ]
+      },
+      "post": {
+        "operationId": "records_api_create_event",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventOutItem"
+                }
+              }
+            },
+            "description": "Created"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Create Event",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/api/v1/events/{id}": {
+      "delete": {
+        "operationId": "records_api_delete_event",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Delete Event",
+        "tags": [
+          "events"
+        ]
+      },
+      "get": {
+        "operationId": "records_api_get_event",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventOutItem"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Get Event",
+        "tags": [
+          "events"
+        ]
+      },
+      "patch": {
+        "operationId": "records_api_update_event",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventOutItem"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Update Event",
+        "tags": [
+          "events"
         ]
       }
     },
@@ -9138,199 +9331,6 @@
         "summary": "Update Note",
         "tags": [
           "notes"
-        ]
-      }
-    },
-    "/api/v1/periods": {
-      "get": {
-        "operationId": "records_api_list_periods",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "title": "Limit",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "offset",
-            "required": false,
-            "schema": {
-              "default": 0,
-              "title": "Offset",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Page_PeriodOut_"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "List Periods",
-        "tags": [
-          "periods"
-        ]
-      },
-      "post": {
-        "operationId": "records_api_create_period",
-        "parameters": [],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PeriodIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PeriodOutItem"
-                }
-              }
-            },
-            "description": "Created"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Create Period",
-        "tags": [
-          "periods"
-        ]
-      }
-    },
-    "/api/v1/periods/{id}": {
-      "delete": {
-        "operationId": "records_api_delete_period",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "title": "Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Delete Period",
-        "tags": [
-          "periods"
-        ]
-      },
-      "get": {
-        "operationId": "records_api_get_period",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "title": "Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PeriodOutItem"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Get Period",
-        "tags": [
-          "periods"
-        ]
-      },
-      "patch": {
-        "operationId": "records_api_update_period",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "title": "Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PeriodPatch"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PeriodOutItem"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "summary": "Update Period",
-        "tags": [
-          "periods"
         ]
       }
     },

@@ -19,9 +19,9 @@ Base URL: {{ base_url }}
 
 ## Reads
 
-`person`, `environment`, `periods`, `goals`, `programs`, `conditions`, `injuries`,
+`person`, `environment`, `events`, `goals`, `programs`, `conditions`, `injuries`,
 `allergies`, `medications`, `labs`, `vaccinations`, `practitioners`, `appointments`,
-`dose-events`, `measurements`, `symptoms`, `checkins`, `notes`, `memory`.
+`doses`, `measurements`, `symptoms`, `checkins`, `notes`, `memory`.
 
 Derived: `expected-doses` (one row per due slot, each with the `scheduled_for` to post back),
 `adherence` (`?medication_id&start&end`), `summary` (one compact bundle: person age, goals,
@@ -30,8 +30,8 @@ memory counts), `health`.
 
 ## Writes
 
-Writable by token: memory, notes, periods, symptoms, injuries, conditions, measurements,
-dose-events, appointments, check-ins, goals, programmes, environment.
+Writable by token: memory, notes, events, symptoms, injuries, conditions, measurements,
+doses, appointments, check-ins, goals, programmes, environment.
 
 UI-only: identity (`/person`), medication plan, allergies, labs, vaccinations, practitioners.
 

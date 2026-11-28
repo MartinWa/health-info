@@ -41,7 +41,7 @@ def factories():
         "/api/v1/programs": lambda user: M.Program._default_manager.create(
             user=user, name=f"{SENTINEL}-program"
         ),
-        "/api/v1/periods": lambda user: M.Period._default_manager.create(
+        "/api/v1/events": lambda user: M.Event._default_manager.create(
             user=user, kind="travel", start=date(2026, 11, 2)
         ),
         "/api/v1/conditions": lambda user: M.Condition._default_manager.create(
@@ -50,7 +50,7 @@ def factories():
         "/api/v1/injuries": lambda user: M.Injury._default_manager.create(
             user=user, area="knee", side="left", mechanism=SENTINEL
         ),
-        "/api/v1/dose-events": lambda user: M.DoseEvent._default_manager.create(
+        "/api/v1/doses": lambda user: M.Dose._default_manager.create(
             user=user, medication=medication(user), at=timezone.now(), reason=SENTINEL
         ),
         "/api/v1/measurements": lambda user: M.Measurement._default_manager.create(
@@ -162,7 +162,7 @@ def test_body_ids_are_owner_scoped(user, other_api):
     claim = FACTORIES["/api/v1/memory"](user)
     cases = [
         (
-            "/api/v1/dose-events",
+            "/api/v1/doses",
             {"medication_id": medication.pk, "at": "2026-11-24T08:00:00Z"},
             "medication_id",
         ),

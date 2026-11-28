@@ -12,8 +12,8 @@ Slices 1–5 of the plan's §10 build order:
   audit events, per-account timezone.
 - Medical context: conditions, injuries, allergies, medication courses with a schedule
   builder, practitioners, vaccinations, appointments.
-- Logs: measurements (blood pressure as a panel plus components), symptoms, check-ins, dose
-  events, periods, notes, timeline, derived expected doses and adherence.
+- Logs: measurements (blood pressure as a panel plus components), symptoms, check-ins,
+  doses, notes, timeline, derived expected doses and adherence.
 - Memory: entries, corrections with the supersede chain, pin/lock, close follow-up,
   `/memory/review` for client-written rows, promoting a symptom into an injury or condition,
   API tokens, settings and audit.

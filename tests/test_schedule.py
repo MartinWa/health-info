@@ -120,9 +120,7 @@ def saved_course(user):
 
 
 def dose(user, medication, at, status="taken"):
-    return M.DoseEvent._default_manager.create(
-        user=user, medication=medication, status=status, at=at
-    )
+    return M.Dose._default_manager.create(user=user, medication=medication, status=status, at=at)
 
 
 def local(day, hour=8, minute=0):

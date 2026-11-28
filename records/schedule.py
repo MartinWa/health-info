@@ -8,7 +8,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from records.models import DoseEvent, Medication, Person
+from records.models import Dose, Medication, Person
 
 
 def account_timezone(user):
@@ -106,7 +106,7 @@ def planned_slots(user, start, end):
     # the lookup on UTC.
     events = {
         (event.medication_id, event.scheduled_for.astimezone(UTC)): event.status
-        for event in DoseEvent._default_manager.filter(
+        for event in Dose._default_manager.filter(
             user=user, scheduled_for__gte=first, scheduled_for__lt=after_last
         )
     }
@@ -124,7 +124,7 @@ def adherence(user, start, end, medication=None):
     expected_by_day = Counter(slot["date"] for slot in slots)
     first, _ = local_day_bounds(start, zone)
     _, after_last = local_day_bounds(end, zone)
-    events = DoseEvent._default_manager.filter(user=user, at__gte=first, at__lt=after_last)
+    events = Dose._default_manager.filter(user=user, at__gte=first, at__lt=after_last)
     if medication is not None:
         events = events.filter(medication=medication)
     taken_by_day = Counter()

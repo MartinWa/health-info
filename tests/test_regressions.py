@@ -22,7 +22,7 @@ def test_the_owner_can_delete_their_own_row(slug, logged_in, make_row):
 def test_deleting_a_course_with_logged_doses_is_refused_cleanly(user, logged_in, course):
     medication = course(started=date(2026, 11, 2))
     medication.save()
-    M.DoseEvent._default_manager.create(
+    M.Dose._default_manager.create(
         user=user, medication=medication, status="taken", at="2026-11-02T08:00:00Z"
     )
     response = logged_in.post(reverse("records:medications_delete", args=[medication.pk]))
@@ -286,7 +286,7 @@ def test_prn_courses_have_a_log_button(user, logged_in, course):
             reverse("records:quick_dose"), {"medication_id": prn.pk, "status": "taken"}
         )
         assert response.status_code == 303
-    assert M.DoseEvent._default_manager.filter(user=user).count() == 2
+    assert M.Dose._default_manager.filter(user=user).count() == 2
 
 
 @pytest.fixture
@@ -310,7 +310,7 @@ def test_a_dose_logged_at_a_dst_boundary_shows_as_logged(user, saved_course, day
         schedule={"type": "daily", "times": ["02:30"]}, started=date(2026, 1, 1)
     )
     slot = S.planned_slots(user, day, day)[0]["scheduled_for"]
-    M.DoseEvent._default_manager.create(
+    M.Dose._default_manager.create(
         user=user, medication=medication, status="taken", at=slot, scheduled_for=slot
     )
     assert S.planned_slots(user, day, day)[0]["status"] == "taken"

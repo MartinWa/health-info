@@ -149,7 +149,7 @@ class ApiToken(models.Model):
         self.save(update_fields=["revoked_at"])
 
 
-class AuditEvent(models.Model):
+class AuditEntry(models.Model):
     """Counts and file names only; never a value, an attempted name or a token prefix."""
 
     user = models.ForeignKey(
@@ -250,8 +250,8 @@ class Program(OwnedRecord):
         return self.name
 
 
-class Period(OwnedRecord):
-    kind = models.CharField(max_length=12, choices=R.choices(R.PERIOD_KIND))
+class Event(OwnedRecord):
+    kind = models.CharField(max_length=12, choices=R.choices(R.EVENT_KIND))
     start = models.DateField()
     end = models.DateField(null=True, blank=True)
     note = models.CharField(max_length=200, blank=True)
@@ -261,7 +261,7 @@ class Period(OwnedRecord):
         constraints = [
             models.CheckConstraint(
                 condition=Q(end__gte=F("start")) | Q(end__isnull=True),
-                name="period_end_after_start",
+                name="event_end_after_start",
             )
         ]
 
@@ -396,7 +396,7 @@ class Medication(OwnedRecord):
         return self.stopped is None
 
 
-class DoseEvent(OwnedRecord):
+class Dose(OwnedRecord):
     medication = models.ForeignKey(Medication, on_delete=models.PROTECT, related_name="dose_events")
     status = models.CharField(max_length=8, choices=R.choices(R.DOSE_STATUS), default="taken")
     at = models.DateTimeField()

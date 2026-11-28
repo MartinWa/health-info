@@ -17,7 +17,7 @@ ROW = {
     "vaccinations": {"vaccine": "sentinel-vaccine"},
     "practitioners": {"name": "sentinel-practitioner"},
     "appointments": {"at": None, "practitioner_name": "sentinel-appointment"},
-    "periods": {"kind": "travel", "start": date(2026, 11, 2)},
+    "events": {"kind": "travel", "start": date(2026, 11, 2)},
     "measurements": {"metric": "body_weight", "value": 90, "at": None},
     "symptoms": {"name": "sentinel-symptom", "onset_at": None},
     "checkins": {"at": None, "energy": 3},

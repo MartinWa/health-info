@@ -19,7 +19,7 @@ ENUMS = [
     R.TOBACCO,
     R.ALCOHOL,
     R.COOKING_FACILITIES,
-    R.PERIOD_KIND,
+    R.EVENT_KIND,
     R.DATE_PRECISION,
     R.GOAL_DIRECTION,
     R.GOAL_STATUS,
@@ -168,7 +168,7 @@ def test_panel_without_both_components_rejects(user):
 
 
 def test_end_before_start_rejects(user):
-    form = F.PeriodForm({"kind": "travel", "start": "2026-11-05", "end": "2026-11-01"}, user=user)
+    form = F.EventForm({"kind": "travel", "start": "2026-11-05", "end": "2026-11-01"}, user=user)
     assert not form.is_valid()
 
 

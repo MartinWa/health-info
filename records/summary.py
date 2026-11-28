@@ -103,18 +103,18 @@ def recent_activity(user, limit=6):
         "records:notes_detail",
     )
     add(
-        M.DoseEvent._default_manager.filter(user=user).select_related("medication"),
+        M.Dose._default_manager.filter(user=user).select_related("medication"),
         "Dose",
         lambda obj: f"{obj.medication} {obj.status}",
         None,
     )
-    for period in M.Period._default_manager.filter(user=user).order_by("-start")[:limit]:
+    for event in M.Event._default_manager.filter(user=user).order_by("-start")[:limit]:
         items.append(
             {
-                "at": timezone.make_aware(datetime.combine(period.start, datetime.min.time())),
-                "kind": "Period",
-                "text": f"{period.get_kind_display()} {period.start}",
-                "url": reverse("records:periods_detail", args=[period.pk]),
+                "at": timezone.make_aware(datetime.combine(event.start, datetime.min.time())),
+                "kind": "Event",
+                "text": f"{event.get_kind_display()} {event.start}",
+                "url": reverse("records:events_detail", args=[event.pk]),
             }
         )
     items.sort(key=lambda item: item["at"], reverse=True)

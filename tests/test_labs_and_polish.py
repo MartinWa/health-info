@@ -223,7 +223,7 @@ def test_export_is_a_zip_of_only_the_signed_in_account(user, stranger, logged_in
 
 def test_purge_needs_the_word_and_keeps_other_accounts_rows(user, stranger, logged_in):
     lab(user)
-    M.DoseEvent._default_manager.create(
+    M.Dose._default_manager.create(
         user=user,
         medication=M.Medication._default_manager.create(
             user=user, substance="Candesartan", schedule={"type": "daily"}
@@ -248,7 +248,7 @@ def test_purge_keeps_tokens_and_the_audit_trail(user, logged_in):
     assert logged_in.post(reverse("records:purge"), {"confirm": "purge"}).status_code == 303
     assert not M.Lab._default_manager.filter(user=user).exists()
     assert M.ApiToken._default_manager.filter(pk=token.pk).exists()
-    assert M.AuditEvent._default_manager.filter(user=user, action="purge").exists()
+    assert M.AuditEntry._default_manager.filter(user=user, action="purge").exists()
 
 
 def test_purge_removes_a_memory_correction_chain(user, logged_in):

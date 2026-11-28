@@ -223,7 +223,7 @@ class ProgramOut(RecordOut):
     workout_types: list[str]
 
 
-class PeriodOut(RecordOut):
+class EventOut(RecordOut):
     kind: str
     start: date
     end: date | None = None
@@ -278,7 +278,7 @@ class MedicationOut(RecordOut):
     purpose_note: str
 
 
-class DoseEventOut(RecordOut):
+class DoseOut(RecordOut):
     medication_id: int
     status: str
     at: datetime
@@ -597,10 +597,10 @@ def enveloped(schema):
 
 GoalItem = enveloped(GoalOut)
 ProgramItem = enveloped(ProgramOut)
-PeriodItem = enveloped(PeriodOut)
+EventItem = enveloped(EventOut)
 ConditionItem = enveloped(ConditionOut)
 InjuryItem = enveloped(InjuryOut)
-DoseEventItem = enveloped(DoseEventOut)
+DoseItem = enveloped(DoseOut)
 MeasurementItem = enveloped(MeasurementOut)
 SymptomItem = enveloped(SymptomOut)
 CheckinItem = enveloped(CheckinOut)
@@ -666,14 +666,14 @@ class ProgramPatch(Strict):
     workout_types: list[str] | None = None
 
 
-class PeriodIn(Strict):
+class EventIn(Strict):
     kind: str
     start: date
     end: date | None = None
     note: str = ""
 
 
-class PeriodPatch(Strict):
+class EventPatch(Strict):
     kind: str | None = None
     start: date | None = None
     end: date | None = None
@@ -726,7 +726,7 @@ class InjuryPatch(Strict):
     limits: list[LimitOut] | None = None
 
 
-class DoseEventIn(Strict):
+class DoseIn(Strict):
     medication_id: int
     status: str = "taken"
     at: datetime
@@ -735,7 +735,7 @@ class DoseEventIn(Strict):
     reason: str = ""
 
 
-class DoseEventPatch(Strict):
+class DosePatch(Strict):
     status: str | None = None
     at: datetime | None = None
     dose: Decimal | None = None
@@ -937,7 +937,7 @@ def commit(obj):
 
 
 def audit(request, action, kind, object_id=""):
-    M.AuditEvent._default_manager.create(
+    M.AuditEntry._default_manager.create(
         user=user_of(request), action=action, object_kind=kind, object_id=str(object_id)
     )
 
@@ -1206,37 +1206,37 @@ def delete_program(request, id: int):
     return HttpResponse(status=204)
 
 
-@api.get("/periods", response=Page[PeriodOut], tags=["periods"])
-def list_periods(request, limit: int = 50, offset: int = 0):
-    return handle_list(request, M.Period, PeriodOut, limit, offset, "start", "date")
+@api.get("/events", response=Page[EventOut], tags=["events"])
+def list_events(request, limit: int = 50, offset: int = 0):
+    return handle_list(request, M.Event, EventOut, limit, offset, "start", "date")
 
 
-@api.post("/periods", response={201: PeriodItem}, tags=["periods"])
-def create_period(request, payload: PeriodIn):
-    obj = new_record(M.Period, request, payload.model_dump())
-    audit(request, "create", "records.Period", obj.pk)
-    return created(request, render(PeriodOut, obj))
+@api.post("/events", response={201: EventItem}, tags=["events"])
+def create_event(request, payload: EventIn):
+    obj = new_record(M.Event, request, payload.model_dump())
+    audit(request, "create", "records.Event", obj.pk)
+    return created(request, render(EventOut, obj))
 
 
-@api.get("/periods/{id}", response=PeriodItem, tags=["periods"])
-def get_period(request, id: int):
-    return render(PeriodOut, fetch(M.Period, request, id))
+@api.get("/events/{id}", response=EventItem, tags=["events"])
+def get_event(request, id: int):
+    return render(EventOut, fetch(M.Event, request, id))
 
 
-@api.patch("/periods/{id}", response=PeriodItem, tags=["periods"])
-def update_period(request, id: int, payload: PeriodPatch):
-    obj = fetch(M.Period, request, id)
+@api.patch("/events/{id}", response=EventItem, tags=["events"])
+def update_event(request, id: int, payload: EventPatch):
+    obj = fetch(M.Event, request, id)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(obj, field, value)
     commit(obj)
-    audit(request, "update", "records.Period", obj.pk)
-    return render(PeriodOut, obj)
+    audit(request, "update", "records.Event", obj.pk)
+    return render(EventOut, obj)
 
 
-@api.delete("/periods/{id}", response={204: None}, tags=["periods"])
-def delete_period(request, id: int):
-    fetch(M.Period, request, id).delete()
-    audit(request, "delete", "records.Period", id)
+@api.delete("/events/{id}", response={204: None}, tags=["events"])
+def delete_event(request, id: int):
+    fetch(M.Event, request, id).delete()
+    audit(request, "delete", "records.Event", id)
     return HttpResponse(status=204)
 
 
@@ -1334,47 +1334,47 @@ def _check_limits(limits):
             raise invalid_field("limits", "A limit is avoid or caution.")
 
 
-@api.get("/dose-events", response=Page[DoseEventOut], tags=["doses"])
-def list_dose_events(request, limit: int = 50, offset: int = 0):
-    return handle_list(request, M.DoseEvent, DoseEventOut, limit, offset, "at")
+@api.get("/doses", response=Page[DoseOut], tags=["doses"])
+def list_doses(request, limit: int = 50, offset: int = 0):
+    return handle_list(request, M.Dose, DoseOut, limit, offset, "at")
 
 
-@api.post("/dose-events", response={200: DoseEventItem, 201: DoseEventItem}, tags=["doses"])
-def create_dose_event(request, payload: DoseEventIn):
+@api.post("/doses", response={200: DoseItem, 201: DoseItem}, tags=["doses"])
+def create_dose(request, payload: DoseIn):
     data = payload.model_dump()
     medication = fetch(M.Medication, request, data.pop("medication_id"), path="medication_id")
     scheduled_for = data.get("scheduled_for")
     if scheduled_for is not None:
-        existing = M.DoseEvent._default_manager.filter(
+        existing = M.Dose._default_manager.filter(
             user=user_of(request), medication=medication, scheduled_for=scheduled_for
         ).first()
         if existing is not None:
             # A retried tap is a no-op, not a second dose.
-            return render(DoseEventOut, existing)
-    obj = new_record(M.DoseEvent, request, data, medication=medication)
-    audit(request, "create", "records.DoseEvent", obj.pk)
-    return created(request, render(DoseEventOut, obj))
+            return render(DoseOut, existing)
+    obj = new_record(M.Dose, request, data, medication=medication)
+    audit(request, "create", "records.Dose", obj.pk)
+    return created(request, render(DoseOut, obj))
 
 
-@api.get("/dose-events/{id}", response=DoseEventItem, tags=["doses"])
-def get_dose_event(request, id: int):
-    return render(DoseEventOut, fetch(M.DoseEvent, request, id))
+@api.get("/doses/{id}", response=DoseItem, tags=["doses"])
+def get_dose(request, id: int):
+    return render(DoseOut, fetch(M.Dose, request, id))
 
 
-@api.patch("/dose-events/{id}", response=DoseEventItem, tags=["doses"])
-def update_dose_event(request, id: int, payload: DoseEventPatch):
-    obj = fetch(M.DoseEvent, request, id)
+@api.patch("/doses/{id}", response=DoseItem, tags=["doses"])
+def update_dose(request, id: int, payload: DosePatch):
+    obj = fetch(M.Dose, request, id)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(obj, field, value)
     commit(obj)
-    audit(request, "update", "records.DoseEvent", obj.pk)
-    return render(DoseEventOut, obj)
+    audit(request, "update", "records.Dose", obj.pk)
+    return render(DoseOut, obj)
 
 
-@api.delete("/dose-events/{id}", response={204: None}, tags=["doses"])
-def delete_dose_event(request, id: int):
-    fetch(M.DoseEvent, request, id).delete()
-    audit(request, "delete", "records.DoseEvent", id)
+@api.delete("/doses/{id}", response={204: None}, tags=["doses"])
+def delete_dose(request, id: int):
+    fetch(M.Dose, request, id).delete()
+    audit(request, "delete", "records.Dose", id)
     return HttpResponse(status=204)
 
 
@@ -1940,7 +1940,7 @@ def health(request):
         domain: model._default_manager.filter(user=user).count()
         for domain, model in M.DOMAIN_MODELS.items()
     }
-    counts["dose_events"] = M.DoseEvent._default_manager.filter(user=user).count()
+    counts["dose_events"] = M.Dose._default_manager.filter(user=user).count()
     return {
         **envelope(),
         "status": "ok",

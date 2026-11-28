@@ -167,7 +167,7 @@ def test_a_body_id_resolves_owner_scoped(api, other_api, course):
     medication.save()
     response = post(
         other_api,
-        "/api/v1/dose-events",
+        "/api/v1/doses",
         {"medication_id": medication.pk, "status": "taken", "at": "2026-11-24T08:00:00Z"},
     )
     assert response.status_code == 404
@@ -197,12 +197,12 @@ def test_a_retried_dose_is_a_no_op(api, course):
         "at": "2026-11-24T08:30:00+01:00",
         "scheduled_for": "2026-11-24T08:00:00+01:00",
     }
-    first = post(api, "/api/v1/dose-events", payload)
+    first = post(api, "/api/v1/doses", payload)
     assert first.status_code == 201
-    again = post(api, "/api/v1/dose-events", payload)
+    again = post(api, "/api/v1/doses", payload)
     assert again.status_code == 200
     assert body(again)["id"] == body(first)["id"]
-    assert M.DoseEvent._default_manager.filter(medication=medication).count() == 1
+    assert M.Dose._default_manager.filter(medication=medication).count() == 1
 
 
 def test_expected_doses_carry_a_scheduled_slot(api, course):
@@ -222,7 +222,7 @@ def test_adherence_counts_events_on_the_day_they_happened(api, course):
         slot = doses["items"][index]
         post(
             api,
-            "/api/v1/dose-events",
+            "/api/v1/doses",
             {
                 "medication_id": medication.pk,
                 "status": status,
@@ -490,10 +490,10 @@ def test_a_measurement_at_defaults_to_now(api):
 CREATES = {
     "/api/v1/goals": {"metric": "body_weight", "direction": "decrease", "target": 90},
     "/api/v1/programs": {"name": "sentinel-programme"},
-    "/api/v1/periods": {"kind": "travel", "start": "2026-11-02"},
+    "/api/v1/events": {"kind": "travel", "start": "2026-11-02"},
     "/api/v1/conditions": {"name": "sentinel-condition"},
     "/api/v1/injuries": {"area": "knee", "side": "left"},
-    "/api/v1/dose-events": {"at": "2026-11-24T08:00:00Z"},
+    "/api/v1/doses": {"at": "2026-11-24T08:00:00Z"},
     "/api/v1/measurements": {"metric": "pulse", "value": 60},
     "/api/v1/symptoms": {"name": "sentinel-symptom", "onset_at": "2026-11-24T09:00:00Z"},
     "/api/v1/checkins": {"at": "2026-11-24T09:00:00Z", "energy": 3},
@@ -511,7 +511,7 @@ CREATES = {
 @pytest.mark.parametrize("collection", sorted(CREATES))
 def test_each_write_route_round_trips(collection, api, user):
     payload = dict(CREATES[collection])
-    if collection == "/api/v1/dose-events":
+    if collection == "/api/v1/doses":
         payload["medication_id"] = M.Medication._default_manager.create(
             user=user,
             substance="sentinel-medication",
@@ -536,7 +536,7 @@ def test_valid_decimals_survive_input(api, course):
     medication.save()
     dose = post(
         api,
-        "/api/v1/dose-events",
+        "/api/v1/doses",
         {"medication_id": medication.pk, "at": "2026-11-24T08:00:00Z", "dose": 0.1},
     )
     assert dose.status_code == 201, dose.content

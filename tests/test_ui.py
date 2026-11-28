@@ -73,7 +73,7 @@ def test_second_dose_tap_is_a_no_op(user, logged_in, course):
             {"medication_id": medication.pk, "scheduled_for": slot, "status": "taken"},
         )
         assert response.status_code == 303
-    assert M.DoseEvent._default_manager.filter(user=user).count() == 1
+    assert M.Dose._default_manager.filter(user=user).count() == 1
 
 
 def test_symptom_severity_zero_is_stored(user, logged_in):
@@ -231,7 +231,7 @@ def test_list_shows_a_badge_for_client_written_rows(user, logged_in):
         "records:quick_symptom",
         "records:quick_note",
         "records:quick_checkin",
-        "records:quick_period",
+        "records:quick_event",
         "records:timeline",
         "records:regimen",
         "records:person",
