@@ -5,12 +5,14 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from django.http import HttpResponse
 from django.test import Client, RequestFactory
 from django.utils import timezone
 
 from records import api as A
 from records import models as M
 from records import registries as R
+from records.middleware import ApiGuardMiddleware
 
 
 def call(client, method, url, payload=None):
@@ -506,10 +508,26 @@ def test_the_public_documents_are_cacheable_and_everything_else_is_not():
         response = anonymous.get(url)
         assert response.status_code == 200, url
         assert response["Cache-Control"] == "public, max-age=300", url
-        assert "Authorization" in response["Vary"], url
+        # The session cookie decides what a session-aware response says, so a shared cache
+        # has to key on it as well as on the token.
+        assert response["Vary"] == "Cookie, Authorization", url
     private = anonymous.get("/api/v1/goals")
     assert private.status_code == 401
     assert private["Cache-Control"] == "no-store"
+
+
+def test_a_public_document_that_sets_a_cookie_is_never_shared():
+    """A cached Set-Cookie would clear another visitor's session when it was replayed."""
+
+    def respond(request):
+        response = HttpResponse("{}", content_type="application/json")
+        response.set_cookie("sessionid", "", max_age=0)
+        return response
+
+    request = RequestFactory().get("/api/v1/openapi.json")
+    response = ApiGuardMiddleware(respond)(request)
+    assert response["Cache-Control"] == "no-store"
+    assert response["Vary"] == "Cookie, Authorization"
 
 
 def test_the_removed_routes_answer_404():

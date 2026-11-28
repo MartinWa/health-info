@@ -78,10 +78,17 @@ class ApiGuardMiddleware:
             )
             if allowed:
                 response["Allow"] = allowed
-        if request.path in _public_document_paths():
-            # Only a deploy changes these, and the response holds no data.
+        # A Set-Cookie still lives in response.cookies until the response is rendered, so both
+        # places have to be checked before the answer is allowed into a shared cache at all.
+        carries_cookie = bool(response.cookies) or response.has_header("Set-Cookie")
+        if request.path in _public_document_paths() and not carries_cookie:
+            # Only a deploy changes these, and the response holds no data. A response carrying
+            # a Set-Cookie is never shared: a cache that stored one would replay it - and the
+            # session clearing it does - to another visitor.
             response["Cache-Control"] = "public, max-age=300"
         else:
             response["Cache-Control"] = "no-store"
-        response["Vary"] = "Authorization"
+        # Django varies a session-aware response on its cookie; a shared cache has to key on
+        # that as well as on the token, or one visitor's answer is served to another.
+        response["Vary"] = "Cookie, Authorization"
         return response
