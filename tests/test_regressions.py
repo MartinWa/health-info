@@ -1,9 +1,13 @@
 """Regression tests for findings that would otherwise repeat: delete, split, silent fields."""
 
+import importlib
 from datetime import date
 from decimal import Decimal
 
 import pytest
+from django.apps import apps
+from django.contrib.auth.models import Group, Permission
+from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
 
 from records import models as M
@@ -314,3 +318,27 @@ def test_a_dose_logged_at_a_dst_boundary_shows_as_logged(user, saved_course, day
         user=user, medication=medication, status="taken", at=slot, scheduled_for=slot
     )
     assert S.planned_slots(user, day, day)[0]["status"] == "taken"
+
+
+def test_a_retired_permission_hands_its_grants_to_the_replacement(user):
+    """Dropping the old permission row must not drop what was granted through it.
+
+    An installation that ran 0006 on its own can hold add_period beside add_event, with a user
+    or a group granted the retired one; deleting the row alone takes those grants with it.
+    """
+    migration = importlib.import_module(
+        "records.migrations.0007_dose_related_name_and_retired_permissions"
+    )
+    content_type = ContentType.objects.get_for_model(M.Event)
+    retired = Permission.objects.create(
+        content_type=content_type, codename="add_period", name="Can add period"
+    )
+    user.user_permissions.add(retired)
+    group = Group.objects.create(name="household")
+    group.permissions.add(retired)
+
+    migration.rename_permissions(apps, {"period": "event"})
+
+    assert not Permission.objects.filter(pk=retired.pk).exists()
+    assert user.user_permissions.filter(codename="add_event").exists()
+    assert group.permissions.filter(codename="add_event").exists()

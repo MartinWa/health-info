@@ -7,6 +7,7 @@ ones, which is why it lives in a new migration rather than inside 0006.
 """
 
 import django.db.models.deletion
+from django.conf import settings
 from django.db import migrations, models
 
 RETIRED = {"period": "event", "doseevent": "dose", "auditevent": "auditentry"}
@@ -14,19 +15,28 @@ ACTIONS = ("add", "change", "delete", "view")
 
 
 def rename_permissions(apps, pairs):
-    """Move each retired codename to its new name, or drop it when the new one is already there."""
+    """Move each retired codename to its new name, dropping it only once its grants are safe."""
     Permission = apps.get_model("auth", "Permission")
+    User = apps.get_model(settings.AUTH_USER_MODEL)
+    Group = apps.get_model("auth", "Group")
     for old, new in pairs.items():
         for action in ACTIONS:
             for row in Permission.objects.filter(codename=f"{action}_{old}"):
                 taken = Permission.objects.filter(
                     content_type_id=row.content_type_id, codename=f"{action}_{new}"
-                )
-                if taken.exists():
-                    row.delete()
-                else:
+                ).first()
+                if taken is None:
                     row.codename = f"{action}_{new}"
                     row.save(update_fields=["codename"])
+                    continue
+                # The new row already exists, so the old one is dropped - but it may be the one
+                # a user or a group was granted, and deleting it takes those assignments with
+                # it. Hand them over first.
+                for user in User.objects.filter(user_permissions=row):
+                    user.user_permissions.add(taken)
+                for group in Group.objects.filter(permissions=row):
+                    group.permissions.add(taken)
+                row.delete()
 
 
 def retire_permissions(apps, schema_editor):
